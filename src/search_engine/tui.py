@@ -143,11 +143,16 @@ class SearchTUI(App[None]):
     }
 
     #related_terms {
-        width: 1fr;
-        margin: 0;
+        margin: 0 2 1 2;
         color: #fff5f8;
         text-style: bold;
         height: auto;
+    }
+
+    #pagination_footer {
+        height: 3;
+        margin: 0 2 0 2;
+        align-vertical: middle;
     }
 
     #preview {
@@ -176,16 +181,15 @@ class SearchTUI(App[None]):
         min-width: 5;
     }
 
-    #results_footer {
-        height: auto;
-        margin: 0 2 1 2;
-    }
-
     #page_info {
         margin: 0 1 0 1;
         color: #6d4458;
-        min-width: 10;
-        content-align: center middle;
+        height: auto;
+    }
+
+    #pagination_footer > Button {
+        margin: 0 0 0 1;
+        min-width: 5;
     }
 
     #root_list {
@@ -318,11 +322,11 @@ class SearchTUI(App[None]):
                             "No whitelist configured.\n\nOpen the Whitelist tab to add one or more directories.",
                             id="preview_content",
                         )
-                with Horizontal(id="results_footer"):
-                    yield Static("Related terms will appear here after a search.", id="related_terms")
+                with Horizontal(id="pagination_footer"):
                     yield Button("◀", id="prev_page")
                     yield Static("Page 0/0", id="page_info")
                     yield Button("▶", id="next_page")
+                yield Static("Related terms will appear here after a search.", id="related_terms")
             with Vertical(id="whitelist_pane", classes="pane"):
                 yield Input(
                     placeholder="Add absolute host path, e.g. /Users/mohammed/Code/Thesis/articles",
