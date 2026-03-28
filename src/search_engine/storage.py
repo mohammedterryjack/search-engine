@@ -122,6 +122,21 @@ class MetadataStore:
                 tuple(terms),
             ).fetchall()
 
+    def page_terms(self, page_keys: list[tuple[str, int]]) -> list[sqlite3.Row]:
+        if not page_keys:
+            return []
+        conditions = " OR ".join("(content_hash = ? AND page_number = ?)" for _ in page_keys)
+        params = [value for page_key in page_keys for value in page_key]
+        with self._connect() as connection:
+            return connection.execute(
+                f"""
+                SELECT term, content_hash, page_number
+                FROM term_documents
+                WHERE {conditions}
+                """,
+                tuple(params),
+            ).fetchall()
+
     def document_frequency(self, term: str) -> int:
         with self._connect() as connection:
             row = connection.execute(

@@ -134,11 +134,20 @@ class SearchTUI(App[None]):
     #results {
         width: 42%;
         height: 1fr;
+        min-height: 8;
         background: #ffd6e3;
         color: #4c3140;
         border: round #d66a91;
         margin: 0 1 1 2;
         padding: 1 0;
+    }
+
+    #related_terms {
+        width: 1fr;
+        margin: 0;
+        color: #fff5f8;
+        text-style: bold;
+        height: auto;
     }
 
     #preview {
@@ -165,6 +174,18 @@ class SearchTUI(App[None]):
     #search_controls > Button {
         margin: 0 0 0 1;
         min-width: 5;
+    }
+
+    #results_footer {
+        height: auto;
+        margin: 0 2 1 2;
+    }
+
+    #page_info {
+        margin: 0 1 0 1;
+        color: #6d4458;
+        min-width: 10;
+        content-align: center middle;
     }
 
     #root_list {
@@ -254,14 +275,24 @@ class SearchTUI(App[None]):
         ("/", "focus_query", "Search"),
     ]
 
-    DEFAULT_INCLUDE_GLOBS = ["**/*.txt", "**/*.md"]
+    DEFAULT_INCLUDE_GLOBS = ["**/*.txt", "**/*.md", "**/*.pdf"]
     DEFAULT_EXCLUDE_GLOBS = ["**/.git/**", "**/node_modules/**", "**/.DS_Store"]
 
     def __init__(self) -> None:
         super().__init__()
         self.settings, self.metadata, self.backend, self.indexer, self.sync_service = build_runtime()
+        normalized_roots = [self._normalize_root_globs(root) for root in self.settings.roots]
+        self.settings = self.settings.model_copy(update={"roots": normalized_roots})
+        self.metadata.set_active_roots(normalized_roots)
+        self.backend.update_roots(normalized_roots)
+        self.sync_service.reload_roots(self.settings)
         self.sync_service.on_state_change = self._handle_index_state_change
         self.hits: list[dict[str, object]] = []
+        self.related_terms: list[str] = []
+        self.current_query: str = ""
+        self.current_page: int = 1
+        self.total_hits: int = 0
+        self.page_size: int = 10
         self.current_query_terms: list[str] = []
         self.root_rows: list[RootConfig] = list(self.settings.roots)
 
@@ -287,6 +318,11 @@ class SearchTUI(App[None]):
                             "No whitelist configured.\n\nOpen the Whitelist tab to add one or more directories.",
                             id="preview_content",
                         )
+                with Horizontal(id="results_footer"):
+                    yield Static("Related terms will appear here after a search.", id="related_terms")
+                    yield Button("◀", id="prev_page")
+                    yield Static("Page 0/0", id="page_info")
+                    yield Button("▶", id="next_page")
             with Vertical(id="whitelist_pane", classes="pane"):
                 yield Input(
                     placeholder="Add absolute host path, e.g. /Users/mohammed/Code/Thesis/articles",
@@ -311,6 +347,7 @@ class SearchTUI(App[None]):
         self.refresh_root_list()
         self.refresh_status()
         self.refresh_stats()
+        self.refresh_pagination()
 
     async def on_unmount(self) -> None:
         await self.sync_service.stop()
@@ -319,8 +356,17 @@ class SearchTUI(App[None]):
         self.query_one("#query", Input).focus()
 
     @staticmethod
-    def _file_url(path: str) -> str:
-        return f"file://{quote(path, safe='/')}"
+    def _file_url(path: str, page_number: int | None = None) -> str:
+        file_url = f"file://{quote(path, safe='/')}"
+        if page_number is not None and Path(path).suffix.casefold() == ".pdf":
+            return f"{file_url}#page={page_number}"
+        return file_url
+
+    def _normalize_root_globs(self, root: RootConfig) -> RootConfig:
+        include_globs = list(root.include_globs)
+        if "**/*.pdf" not in include_globs:
+            include_globs.append("**/*.pdf")
+        return root.model_copy(update={"include_globs": include_globs})
 
     def _handle_index_state_change(self) -> None:
         if self._thread_id == threading.get_ident():
@@ -355,22 +401,56 @@ class SearchTUI(App[None]):
 
     @on(Input.Submitted, "#query")
     async def run_search(self, event: Input.Submitted) -> None:
-        query = event.value.strip()
-        self.current_query_terms = tokenize_terms(query)
-        if query:
+        self.current_query = event.value.strip()
+        self.current_page = 1
+        self.current_query_terms = tokenize_terms(self.current_query)
+        if self.current_query:
             self.sync_service.trigger_refresh()
             self.refresh_status()
-        self.hits = self.backend.search(query).get("hits", []) if query else []
+        self._run_current_search()
+
+    @on(Button.Pressed, "#prev_page")
+    def previous_page(self) -> None:
+        if self.current_page <= 1 or not self.current_query:
+            return
+        self.current_page -= 1
+        self._run_current_search()
+
+    @on(Button.Pressed, "#next_page")
+    def next_page(self) -> None:
+        if not self.current_query:
+            return
+        max_page = max((self.total_hits + self.page_size - 1) // self.page_size, 1)
+        if self.current_page >= max_page:
+            return
+        self.current_page += 1
+        self._run_current_search()
+
+    def _run_current_search(self) -> None:
+        query = self.current_query
+        search_result = (
+            self.backend.search(query, per_page=self.page_size, page=self.current_page, hydrate=False)
+            if query
+            else {"hits": [], "related_terms": [], "total_hits": 0, "page": 1, "per_page": self.page_size}
+        )
+        self.hits = search_result.get("hits", [])
+        self.related_terms = list(search_result.get("related_terms", []))
+        self.total_hits = int(search_result.get("total_hits", 0))
+        self.current_page = int(search_result.get("page", self.current_page))
         results = self.query_one("#results", ListView)
         results.clear()
 
-        for index, hit in enumerate(self.hits, start=1):
-            file_url = self._file_url(str(hit["file_path"]))
+        start_index = (self.current_page - 1) * self.page_size
+        for offset, hit in enumerate(self.hits, start=1):
+            index = start_index + offset
+            file_url = self._file_url(str(hit["file_path"]), int(hit["page_number"]))
             label = (
                 f'[bold][link={file_url}]{index}. {hit["relative_path"]}[/link][/bold]\n'
                 f'[dim]page {hit["page_number"]}  |  ({float(hit["score"]):.2f})[/dim]'
             )
             results.append(ListItem(Static(Text.from_markup(label))))
+        self.refresh_related_terms()
+        self.refresh_pagination()
 
         if self.hits:
             results.index = 0
@@ -427,6 +507,12 @@ class SearchTUI(App[None]):
             self.sync_service.trigger_refresh()
             self.refresh_status()
         self.query_one("#results", ListView).clear()
+        self.related_terms = []
+        self.current_query = ""
+        self.current_page = 1
+        self.total_hits = 0
+        self.refresh_related_terms()
+        self.refresh_pagination()
         if self.root_rows:
             self.query_one("#preview_content", Static).update(
                 "Configured whitelist:\n" + "\n".join(f"- {root.path}" for root in self.root_rows)
@@ -460,7 +546,6 @@ class SearchTUI(App[None]):
         _, _, _, page_text = load_page_number(
             Path(str(hit["file_path"])),
             int(hit["page_number"]),
-            self.settings.paging,
         )
         preview = escape(page_text) if page_text else "No page preview available."
         for term in sorted(set(self.current_query_terms), key=len, reverse=True):
@@ -472,7 +557,12 @@ class SearchTUI(App[None]):
     def clear_index(self) -> None:
         self.metadata.clear(self.settings.roots)
         self.hits = []
+        self.related_terms = []
+        self.current_page = 1
+        self.total_hits = 0
         self.query_one("#results", ListView).clear()
+        self.refresh_related_terms()
+        self.refresh_pagination()
         self.query_one("#preview_content", Static).update("Index cleared.")
         self.query_one("#preview", VerticalScroll).scroll_home(animate=False)
         self.refresh_status()
@@ -485,6 +575,13 @@ class SearchTUI(App[None]):
             self.query_one("#status", Static).update("No selected result to copy.")
             return
         snippet = str(self.hits[results.index].get("snippet", ""))
+        if not snippet:
+            snippet = self.backend.snippet_for_location(
+                str(self.hits[results.index]["file_path"]),
+                int(self.hits[results.index]["page_number"]),
+                self.current_query_terms,
+            )
+            self.hits[results.index]["snippet"] = snippet
         plain_snippet = re.sub(r"</?mark>", "", snippet)
         self.copy_to_clipboard(plain_snippet)
         self.refresh_status(message="Snippet copied.")
@@ -492,10 +589,11 @@ class SearchTUI(App[None]):
     def refresh_status(self, message: str | None = None) -> None:
         status = "indexing" if self.sync_service.is_indexing else "ready"
         try:
+            result_count = self.total_hits if self.current_query else len(self.hits)
             line = (
                 f'{self.metadata.total_file_count(self.settings.roots)} files | '
                 f'{self.metadata.unique_hash_count(self.settings.roots)} hashes | '
-                f'{len(self.hits)} results | '
+                f'{result_count} results | '
                 f'{len(self.root_rows)} whitelist entries | '
                 f'status: {status}'
             )
@@ -540,6 +638,20 @@ class SearchTUI(App[None]):
             self.query_one("#stats_panel", Static).update("\n".join(lines))
         except sqlite3.OperationalError as exc:
             self.query_one("#stats_panel", Static).update(f"Index Stats\n\nDatabase temporarily unavailable: {exc}")
+
+    def refresh_related_terms(self) -> None:
+        if self.related_terms:
+            self.query_one("#related_terms", Static).update(
+                "Related terms: " + ", ".join(self.related_terms)
+            )
+            return
+        self.query_one("#related_terms", Static).update("Related terms will appear here after a search.")
+
+    def refresh_pagination(self) -> None:
+        max_page = max((self.total_hits + self.page_size - 1) // self.page_size, 1)
+        self.query_one("#page_info", Static).update(f"Page {self.current_page}/{max_page}")
+        self.query_one("#prev_page", Button).disabled = self.current_page <= 1 or self.total_hits == 0
+        self.query_one("#next_page", Button).disabled = self.current_page >= max_page or self.total_hits == 0
 
     @staticmethod
     def _format_bytes(num_bytes: int) -> str:

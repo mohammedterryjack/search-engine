@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import fnmatch
-import hashlib
 import logging
 import subprocess
 from pathlib import Path
 
 from .config import RootConfig, Settings
+from .document_loader import SUPPORTED_EXTENSIONS, load_document
 from .index_registry import IndexRegistry
 from .models import DocumentRecord
 from .paging import split_pages_in_text
@@ -36,10 +36,8 @@ class Indexer:
         record = store.get(str(path))
 
         try:
-            raw_text = path.read_text(encoding="utf-8", errors="ignore")
-            normalized_text = raw_text.replace("\r\n", "\n").replace("\r", "\n")
-            content_hash = hashlib.sha1(raw_text.encode("utf-8", errors="ignore")).hexdigest()
-        except OSError as exc:
+            normalized_text, content_hash = load_document(path)
+        except (OSError, ValueError) as exc:
             logger.warning("Failed to read %s: %s", path, exc)
             return
 
@@ -55,7 +53,7 @@ class Indexer:
 
         page_terms = {
             page_number: set(tokenize_terms(page_text))
-            for page_number, _, _, page_text in split_pages_in_text(normalized_text, self.settings.paging)
+            for page_number, _, _, page_text in split_pages_in_text(normalized_text)
         }
         store.upsert_document(
             DocumentRecord(
@@ -108,6 +106,8 @@ class Indexer:
 
 
 def _matches(path: Path, root: RootConfig, base_path: Path) -> bool:
+    if path.suffix.casefold() not in SUPPORTED_EXTENSIONS:
+        return False
     relative_path = path.relative_to(base_path).as_posix()
     candidates = {relative_path, f"**/{relative_path}"}
     if root.include_globs and not any(

@@ -43,13 +43,13 @@ class IndexRegistry:
         active_keys: list[str] = []
         for root in roots:
             key = self._root_key(root)
-            db_path = str(self.index_dir / f"{key}.db")
+            entry = self._entry_for_root(entries, root)
             entries[key] = {
                 "name": root.name,
                 "path": root.path,
                 "include_globs": list(root.include_globs),
                 "exclude_globs": list(root.exclude_globs),
-                "db_path": db_path,
+                "db_path": entry["db_path"],
             }
             active_keys.append(key)
         data["active_keys"] = active_keys
@@ -61,13 +61,13 @@ class IndexRegistry:
         entries = data.setdefault("entries", {})
         entry = entries.get(key)
         if entry is None:
-            db_path = str(self.index_dir / f"{key}.db")
+            entry = self._entry_for_root(entries, root)
             entry = {
                 "name": root.name,
                 "path": root.path,
                 "include_globs": list(root.include_globs),
                 "exclude_globs": list(root.exclude_globs),
-                "db_path": db_path,
+                "db_path": entry["db_path"],
             }
             entries[key] = entry
             self._save_registry(data)
@@ -85,6 +85,12 @@ class IndexRegistry:
         rows: list[dict[str, object]] = []
         for store in self.stores_for_roots(roots):
             rows.extend(dict(row) for row in store.search_documents(terms))
+        return rows
+
+    def page_terms(self, page_keys: list[tuple[str, int]], roots: list[RootConfig]) -> list[dict[str, object]]:
+        rows: list[dict[str, object]] = []
+        for store in self.stores_for_roots(roots):
+            rows.extend(dict(row) for row in store.page_terms(page_keys))
         return rows
 
     def document_frequency(self, term: str, roots: list[RootConfig]) -> int:
@@ -134,13 +140,24 @@ class IndexRegistry:
     def _normalized_root(root: RootConfig) -> dict[str, object]:
         return {
             "path": str(Path(root.path).expanduser().resolve(strict=False)),
-            "include_globs": sorted(root.include_globs),
-            "exclude_globs": sorted(root.exclude_globs),
         }
 
     def _root_key(self, root: RootConfig) -> str:
         payload = json.dumps(self._normalized_root(root), sort_keys=True, separators=(",", ":"))
         return hashlib.sha1(payload.encode("utf-8")).hexdigest()
+
+    def _entry_for_root(self, entries: dict[str, object], root: RootConfig) -> dict[str, object]:
+        key = self._root_key(root)
+        entry = entries.get(key)
+        if entry is not None:
+            return dict(entry)
+
+        normalized_path = self._normalized_root(root)["path"]
+        for existing in entries.values():
+            if str(existing.get("path", "")) == normalized_path:
+                return dict(existing)
+
+        return {"db_path": str(self.index_dir / f"{key}.db")}
 
     def _load_registry(self) -> dict[str, object]:
         if not self.registry_path.exists():

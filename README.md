@@ -27,6 +27,7 @@ docker compose run --rm app python -m search_engine.tui --query president --json
 
 - `.txt`
 - `.md`
+- `.pdf`
 
 ## Notes
 

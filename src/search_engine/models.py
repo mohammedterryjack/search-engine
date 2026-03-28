@@ -12,12 +12,9 @@ class DocumentRecord:
 
 @dataclass(slots=True)
 class SearchHit:
-    hit_id: str
     content_hash: str
     file_path: str
     relative_path: str
-    root_name: str
-    extension: str
     page_number: int
     snippet: str
     score: float

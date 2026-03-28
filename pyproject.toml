@@ -5,10 +5,9 @@ description = "Lightweight local search engine over configurable filesystem root
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+  "pypdf>=5.4.0",
   "pydantic>=2.11.0",
-  "pydantic-settings>=2.10.0",
   "textual>=0.79.1",
-  "watchfiles>=1.1.0",
 ]
 
 [project.optional-dependencies]

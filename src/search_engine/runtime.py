@@ -13,7 +13,6 @@ def build_runtime() -> tuple[Settings, IndexRegistry, SearchBackend, Indexer, Sy
     settings = settings.model_copy(update={"roots": registry.load_active_roots()})
     backend = SearchBackend(
         registry,
-        paging=settings.paging,
         roots=settings.roots,
         snippet_length=settings.app.snippet_length,
     )

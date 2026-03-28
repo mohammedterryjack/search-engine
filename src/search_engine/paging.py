@@ -2,17 +2,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .config import PagingConfig
+from .document_loader import load_document
 
 
 def read_text(path: Path) -> str:
-    return path.read_text(encoding="utf-8", errors="ignore").replace("\r\n", "\n").replace("\r", "\n")
+    text, _ = load_document(path)
+    return text
 
 
-def split_pages_in_text(
-    text: str,
-    config: PagingConfig,
-) -> list[tuple[int, int, int, str]]:
+def split_pages_in_text(text: str) -> list[tuple[int, int, int, str]]:
     if "\f" not in text:
         lines = text.split("\n")
         line_end = max(len(lines), 1)
@@ -31,15 +29,12 @@ def split_pages_in_text(
     return pages
 
 
-def split_pages(
-    path: Path,
-    config: PagingConfig,
-) -> list[tuple[int, int, int, str]]:
-    return split_pages_in_text(read_text(path), config)
+def split_pages(path: Path) -> list[tuple[int, int, int, str]]:
+    return split_pages_in_text(read_text(path))
 
 
-def load_page_number(path: Path, page_number: int, config: PagingConfig) -> tuple[int, int, int, str]:
-    pages = split_pages(path, config)
+def load_page_number(path: Path, page_number: int) -> tuple[int, int, int, str]:
+    pages = split_pages(path)
     if not pages:
         return 1, 1, 1, ""
     target_page = max(page_number, 1)
