@@ -1,0 +1,9 @@
+services:
+  app:
+    build:
+      context: .
+    stdin_open: true
+    tty: true
+    volumes:
+      - ./data:/app/data
+      - /Users:/Users:ro

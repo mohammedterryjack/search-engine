@@ -1,0 +1,2 @@
+"""Local search engine package."""
+
