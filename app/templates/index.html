@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Searchy{% endblock %}
+{% block body_class %}home-body{% endblock %}
+{% block body %}
+<main class="home-shell">
+  <header class="home-header">
+    <div class="brand">Searchy</div>
+  </header>
+  <section class="search-card">
+    <form action="/search" method="get" class="search-form home-search-form">
+      <div class="search-input-wrap">
+        <input type="text" name="q" class="search-input" autocomplete="off" autofocus>
+      </div>
+      <div class="action-row">
+        <button type="submit" class="primary-button">Search</button>
+        <a href="/sources" class="secondary-link">Manage Sources</a>
+      </div>
+    </form>
+  </section>
+  <section class="status-strip">
+    <span>{{ sources|length }} source{{ '' if sources|length == 1 else 's' }}</span>
+    <span>{{ jobs|length }} recent job{{ '' if jobs|length == 1 else 's' }}</span>
+  </section>
+</main>
+{% endblock %}

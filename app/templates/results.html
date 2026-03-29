@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}{{ query }} - Searchy{% endblock %}
+{% block body %}
+<header class="topbar">
+  <a href="/" class="brand brand-small">Searchy</a>
+  <form action="/search" method="get" class="search-form results-search-form">
+    <div class="search-input-wrap">
+      <input type="text" name="q" value="{{ query }}" class="search-input" autocomplete="off" autofocus>
+    </div>
+    <button type="submit" class="primary-button">Search</button>
+  </form>
+</header>
+<main class="results-layout">
+  <aside class="filters">
+    <div class="filters-title">Sources</div>
+    <form action="/search" method="get">
+      <input type="hidden" name="q" value="{{ query }}">
+      {% for source in sources %}
+      <label class="source-filter">
+        <input type="checkbox" name="source" value="{{ source.id }}" {% if source.id in selected_sources %}checked{% endif %}>
+        <span>{{ source.source_path }}</span>
+      </label>
+      {% endfor %}
+      <button type="submit" class="secondary-button">Apply</button>
+    </form>
+  </aside>
+  <section class="results-column">
+    {% if query %}
+    <div class="results-meta">{{ results|length }} results</div>
+    {% endif %}
+    {% for result in results %}
+    <article class="result-card">
+      <div class="result-path">{{ result.document_path }}</div>
+      <h2 class="result-title">
+        <a href="/open/{{ result.source_root_id }}/{{ result.content_unit_id }}">{{ result.section_name or result.filename }}</a>
+      </h2>
+      <div class="result-subtitle">
+        <span>{{ result.unit_type }}</span>
+        {% if result.page_number %}
+        <span>Page {{ result.page_number }}</span>
+        {% endif %}
+      </div>
+      <p class="result-snippet">{{ result.display_text|truncate_text|highlight_terms(query)|safe }}</p>
+    </article>
+    {% else %}
+    {% if query %}
+    <p class="empty-state">No indexed sections matched that query yet.</p>
+    {% endif %}
+    {% endfor %}
+  </section>
+</main>
+{% endblock %}

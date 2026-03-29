@@ -1,0 +1,28 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+
+@dataclass(slots=True)
+class SourceRoot:
+    id: int
+    source_path: str
+    source_type: str
+    db_path: str
+    status: str
+    created_at: str
+
+
+@dataclass(slots=True)
+class SearchResult:
+    source_root_id: int
+    source_path: str
+    document_id: int
+    content_unit_id: int
+    document_path: str
+    filename: str
+    unit_type: str
+    page_number: int | None
+    section_name: str
+    display_text: str
+    score: float

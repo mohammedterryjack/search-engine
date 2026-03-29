@@ -1,9 +1,43 @@
 services:
-  app:
-    build:
-      context: .
-    stdin_open: true
-    tty: true
+  web:
+    build: .
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "18000:8000"
     volumes:
+      - .:/app
       - ./data:/app/data
-      - /Users:/Users:ro
+      - ${SEARCHY_SOURCE_ROOT:-/tmp}:/sources:ro
+    environment:
+      SEARCHY_DATA_DIR: /app/data
+      SEARCHY_APP_DB_PATH: /app/data/app_data/searchy_app.sqlite3
+      SEARCHY_SOURCE_DB_DIR: /app/data/source_dbs
+      SEARCHY_SOURCE_MOUNT: /sources
+      SEARCHY_RERANKER_URL: http://reranker:8010
+      SEARCHY_ENABLE_RERANKER: "1"
+    depends_on:
+      - reranker
+
+  worker:
+    build: .
+    command: python -m app.worker.runner
+    volumes:
+      - .:/app
+      - ./data:/app/data
+      - ${SEARCHY_SOURCE_ROOT:-/tmp}:/sources:ro
+    environment:
+      SEARCHY_DATA_DIR: /app/data
+      SEARCHY_APP_DB_PATH: /app/data/app_data/searchy_app.sqlite3
+      SEARCHY_SOURCE_DB_DIR: /app/data/source_dbs
+      SEARCHY_SOURCE_MOUNT: /sources
+      SEARCHY_POLL_SECONDS: "3"
+
+  reranker:
+    build: .
+    command: uvicorn app.reranker_api:app --host 0.0.0.0 --port 8010 --reload
+    volumes:
+      - .:/app
+    environment:
+      SEARCHY_ENABLE_RERANKER: "0"
+    ports:
+      - "18010:8010"

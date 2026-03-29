@@ -1,16 +1,22 @@
 [project]
-name = "local-search-engine"
+name = "searchy"
 version = "0.1.0"
-description = "Lightweight local search engine over configurable filesystem roots."
+description = "Local document search engine with FastAPI, SQLite, and async ingestion."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-  "pypdf>=5.4.0",
+  "fastapi>=0.118.0",
+  "jinja2>=3.1.6",
   "pydantic>=2.11.0",
-  "textual>=0.79.1",
+  "python-multipart>=0.0.20",
+  "uvicorn[standard]>=0.37.0",
 ]
 
 [project.optional-dependencies]
+ml = [
+  "docling>=2.33.0",
+  "sentence-transformers>=5.1.0",
+]
 dev = [
   "pytest>=8.4.0",
 ]
@@ -20,7 +26,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/search_engine"]
+packages = ["app"]
 
 [tool.uv]
 package = true

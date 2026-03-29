@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Sources - Searchy{% endblock %}
+{% block body %}
+<main class="admin-shell">
+  <header class="admin-header">
+    <a href="/" class="brand brand-small">Searchy</a>
+    <h1>Sources</h1>
+  </header>
+
+  <section class="admin-card">
+    <form action="/sources" method="post" class="source-form">
+      <label for="source_path">Add whitelist path</label>
+      <div class="source-input-row">
+        <input id="source_path" name="source_path" type="text" class="source-input" placeholder="/absolute/path/or/file" required>
+        <button type="submit" class="primary-button">Add Source</button>
+      </div>
+    </form>
+  </section>
+
+  {% for row in rows %}
+  <section class="admin-card">
+    <div class="source-header">
+      <div>
+        <h2>{{ row.source.source_path }}</h2>
+        <div class="source-meta">{{ row.documents|length }} documents</div>
+      </div>
+      <div class="source-actions">
+        <form action="/sources/{{ row.source.id }}/clear" method="post">
+          <button type="submit" class="secondary-button">Clear DB</button>
+        </form>
+        <form action="/sources/{{ row.source.id }}/delete" method="post">
+          <button type="submit" class="danger-button">Remove Source</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="jobs-block">
+      <h3>Recent Jobs</h3>
+      {% for job in row.jobs %}
+      <div class="job-row">
+        <span class="job-status job-{{ job.status }}">{{ job.status }}</span>
+        <span>{{ job.document_path }}</span>
+      </div>
+      {% else %}
+      <div class="job-row muted">No jobs yet.</div>
+      {% endfor %}
+    </div>
+
+    <div class="documents-block">
+      <h3>Indexed Documents</h3>
+      {% for document in row.documents %}
+      <div class="document-row">
+        <div>
+          <div class="document-title">{{ document.filename }}</div>
+          <div class="document-meta">{{ document.source_path }}</div>
+        </div>
+        <form action="/sources/{{ row.source.id }}/documents/{{ document.id }}/delete" method="post">
+          <button type="submit" class="text-button">Remove</button>
+        </form>
+      </div>
+      {% else %}
+      <div class="document-row muted">Nothing indexed yet.</div>
+      {% endfor %}
+    </div>
+  </section>
+  {% else %}
+  <section class="admin-card empty-admin">
+    No sources yet.
+  </section>
+  {% endfor %}
+</main>
+{% endblock %}
