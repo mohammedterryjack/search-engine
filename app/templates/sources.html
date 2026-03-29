@@ -10,8 +10,14 @@
   <section class="admin-card">
     <form action="/sources" method="post" class="source-form">
       <label for="source_path">Add whitelist path</label>
+      <div class="source-hint">
+        Host paths under <code>{{ host_source_root }}</code> are accepted and mapped into the container at <code>{{ source_mount }}</code>.
+      </div>
+      {% if error %}
+      <div class="form-error">{{ error }}</div>
+      {% endif %}
       <div class="source-input-row">
-        <input id="source_path" name="source_path" type="text" class="source-input" placeholder="/absolute/path/or/file" required>
+        <input id="source_path" name="source_path" type="text" class="source-input" placeholder="/absolute/path/or/file" value="{{ source_path }}" required>
         <button type="submit" class="primary-button">Add Source</button>
       </div>
     </form>

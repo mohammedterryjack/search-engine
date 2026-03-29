@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from urllib.parse import quote
+from urllib.parse import urlencode
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -36,6 +37,51 @@ def startup() -> None:
     GlobalStore()
 
 
+def sources_redirect(*, error: str | None = None, source_path: str | None = None) -> RedirectResponse:
+    params: dict[str, str] = {}
+    if error:
+        params["error"] = error
+    if source_path:
+        params["source_path"] = source_path
+    url = "/sources"
+    if params:
+        url += f"?{urlencode(params)}"
+    return RedirectResponse(url=url, status_code=303)
+
+
+def resolve_source_path(raw_source_path: str) -> tuple[Path, str]:
+    input_path = Path(raw_source_path).expanduser()
+    if not input_path.is_absolute():
+        input_path = (settings.host_source_root / input_path).resolve()
+    else:
+        input_path = input_path.resolve()
+
+    if input_path.exists():
+        try:
+            relative = input_path.relative_to(settings.host_source_root)
+            mounted_path = (settings.source_mount / relative).resolve()
+            if mounted_path.exists():
+                return mounted_path, str(input_path)
+        except ValueError:
+            pass
+
+        if str(input_path).startswith(str(settings.source_mount)):
+            return input_path, str(input_path)
+
+    try:
+        relative = input_path.relative_to(settings.host_source_root)
+        mounted_path = (settings.source_mount / relative).resolve()
+        if mounted_path.exists():
+            return mounted_path, str(input_path)
+    except ValueError:
+        pass
+
+    raise FileNotFoundError(
+        f"Path not found inside Searchy. Use a path under {settings.host_source_root} "
+        f"or its mounted container path under {settings.source_mount}."
+    )
+
+
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request) -> HTMLResponse:
     store = GlobalStore()
@@ -67,7 +113,11 @@ async def search(request: Request, q: str = "", source: list[int] | None = None)
 
 
 @app.get("/sources", response_class=HTMLResponse)
-async def sources_view(request: Request) -> HTMLResponse:
+async def sources_view(
+    request: Request,
+    error: str | None = None,
+    source_path: str = "",
+) -> HTMLResponse:
     store = GlobalStore()
     rows = []
     for source in store.list_source_roots():
@@ -79,7 +129,17 @@ async def sources_view(request: Request) -> HTMLResponse:
                 "jobs": store.list_jobs(int(source["id"]))[:10],
             }
         )
-    return templates.TemplateResponse(request, "sources.html", {"rows": rows})
+    return templates.TemplateResponse(
+        request,
+        "sources.html",
+        {
+            "rows": rows,
+            "error": error,
+            "source_path": source_path,
+            "host_source_root": settings.host_source_root,
+            "source_mount": settings.source_mount,
+        },
+    )
 
 
 @app.post("/sources")
@@ -87,10 +147,11 @@ async def add_source(request: Request) -> RedirectResponse:
     form = await request.form()
     source_path = str(form.get("source_path", "")).strip()
     if not source_path:
-        raise HTTPException(status_code=400, detail="Source path is required")
-    path = Path(source_path).expanduser().resolve()
-    if not path.exists():
-        raise HTTPException(status_code=400, detail="Source path does not exist")
+        return sources_redirect(error="Source path is required.")
+    try:
+        path, display_source_path = resolve_source_path(source_path)
+    except FileNotFoundError as exc:
+        return sources_redirect(error=str(exc), source_path=source_path)
 
     store = GlobalStore()
     source_root = store.ensure_source_root(path)
@@ -101,7 +162,7 @@ async def add_source(request: Request) -> RedirectResponse:
         if not source_store.has_document(document_path):
             store.enqueue_document(int(source_root["id"]), document_path)
 
-    return RedirectResponse(url="/sources", status_code=303)
+    return sources_redirect(source_path=display_source_path)
 
 
 @app.post("/sources/{source_root_id}/clear")
