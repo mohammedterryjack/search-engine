@@ -7,13 +7,12 @@ services:
     volumes:
       - .:/app
       - ./data:/app/data
-      - ${SEARCHY_SOURCE_ROOT:-/tmp}:/sources:ro
+      - /Users:/Users:ro
     environment:
       SEARCHY_DATA_DIR: /app/data
       SEARCHY_APP_DB_PATH: /app/data/app_data/searchy_app.sqlite3
       SEARCHY_SOURCE_DB_DIR: /app/data/source_dbs
-      SEARCHY_SOURCE_MOUNT: /sources
-      SEARCHY_HOST_SOURCE_ROOT: ${SEARCHY_SOURCE_ROOT:-/tmp}
+      SEARCHY_ALLOWED_SOURCE_ROOT: /Users
       SEARCHY_RERANKER_URL: http://reranker:8010
       SEARCHY_ENABLE_RERANKER: "1"
     depends_on:
@@ -25,13 +24,12 @@ services:
     volumes:
       - .:/app
       - ./data:/app/data
-      - ${SEARCHY_SOURCE_ROOT:-/tmp}:/sources:ro
+      - /Users:/Users:ro
     environment:
       SEARCHY_DATA_DIR: /app/data
       SEARCHY_APP_DB_PATH: /app/data/app_data/searchy_app.sqlite3
       SEARCHY_SOURCE_DB_DIR: /app/data/source_dbs
-      SEARCHY_SOURCE_MOUNT: /sources
-      SEARCHY_HOST_SOURCE_ROOT: ${SEARCHY_SOURCE_ROOT:-/tmp}
+      SEARCHY_ALLOWED_SOURCE_ROOT: /Users
       SEARCHY_POLL_SECONDS: "3"
 
   reranker:

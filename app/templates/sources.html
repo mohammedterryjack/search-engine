@@ -1,9 +1,9 @@
 {% extends "base.html" %}
-{% block title %}Sources - Searchy{% endblock %}
+{% block title %}Sources - SirChi{% endblock %}
 {% block body %}
 <main class="admin-shell">
   <header class="admin-header">
-    <a href="/" class="brand brand-small">Searchy</a>
+    <a href="/" class="brand brand-small">SirChi</a>
     <h1>Sources</h1>
   </header>
 
@@ -11,7 +11,7 @@
     <form action="/sources" method="post" class="source-form">
       <label for="source_path">Add whitelist path</label>
       <div class="source-hint">
-        Host paths under <code>{{ host_source_root }}</code> are accepted and mapped into the container at <code>{{ source_mount }}</code>.
+        Enter an absolute path under <code>{{ allowed_source_root }}</code>. SirChi reads those files directly inside Docker.
       </div>
       {% if error %}
       <div class="form-error">{{ error }}</div>

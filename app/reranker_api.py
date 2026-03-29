@@ -5,7 +5,7 @@ from collections import Counter
 from fastapi import FastAPI, Request
 
 
-app = FastAPI(title="Searchy Reranker")
+app = FastAPI(title="SirChi Reranker")
 
 
 def overlap_score(query: str, text: str, base_score: float) -> float:

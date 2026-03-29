@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+import mimetypes
 from pathlib import Path
-from urllib.parse import quote
 from urllib.parse import urlencode
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -18,7 +18,7 @@ from app.ui import highlight_terms, truncate_text
 
 
 settings = get_settings()
-app = FastAPI(title="Searchy")
+app = FastAPI(title="SirChi")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 templates.env.filters["highlight_terms"] = highlight_terms
@@ -52,34 +52,32 @@ def sources_redirect(*, error: str | None = None, source_path: str | None = None
 def resolve_source_path(raw_source_path: str) -> tuple[Path, str]:
     input_path = Path(raw_source_path).expanduser()
     if not input_path.is_absolute():
-        input_path = (settings.host_source_root / input_path).resolve()
-    else:
-        input_path = input_path.resolve()
-
-    if input_path.exists():
-        try:
-            relative = input_path.relative_to(settings.host_source_root)
-            mounted_path = (settings.source_mount / relative).resolve()
-            if mounted_path.exists():
-                return mounted_path, str(input_path)
-        except ValueError:
-            pass
-
-        if str(input_path).startswith(str(settings.source_mount)):
-            return input_path, str(input_path)
-
+        raise FileNotFoundError("Use an absolute path.")
+    input_path = input_path.resolve()
     try:
-        relative = input_path.relative_to(settings.host_source_root)
-        mounted_path = (settings.source_mount / relative).resolve()
-        if mounted_path.exists():
-            return mounted_path, str(input_path)
-    except ValueError:
-        pass
+        input_path.relative_to(settings.allowed_source_root)
+    except ValueError as exc:
+        raise FileNotFoundError(
+            f"Path must be under {settings.allowed_source_root}."
+        ) from exc
+    if not input_path.exists():
+        raise FileNotFoundError("Source path does not exist.")
+    return input_path, str(input_path)
 
-    raise FileNotFoundError(
-        f"Path not found inside Searchy. Use a path under {settings.host_source_root} "
-        f"or its mounted container path under {settings.source_mount}."
-    )
+
+def get_content_unit(source_root_id: int, content_unit_id: int) -> tuple[Path, object]:
+    store = GlobalStore()
+    source_root = store.get_source_root(source_root_id)
+    if source_root is None:
+        raise HTTPException(status_code=404, detail="Source not found")
+    source_store = SourceStore(Path(str(source_root["db_path"])))
+    row = source_store.content_unit_by_id(content_unit_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Result not found")
+    document_path = Path(str(row["document_path"]))
+    if not document_path.exists():
+        raise HTTPException(status_code=404, detail="Source document is missing")
+    return document_path, row
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -136,8 +134,7 @@ async def sources_view(
             "rows": rows,
             "error": error,
             "source_path": source_path,
-            "host_source_root": settings.host_source_root,
-            "source_mount": settings.source_mount,
+            "allowed_source_root": settings.allowed_source_root,
         },
     )
 
@@ -200,18 +197,20 @@ async def delete_document(source_root_id: int, document_id: int) -> RedirectResp
 
 @app.get("/open/{source_root_id}/{content_unit_id}")
 async def open_result(source_root_id: int, content_unit_id: int) -> RedirectResponse:
-    store = GlobalStore()
-    source_root = store.get_source_root(source_root_id)
-    if source_root is None:
-        raise HTTPException(status_code=404, detail="Source not found")
-    source_store = SourceStore(Path(str(source_root["db_path"])))
-    row = source_store.content_unit_by_id(content_unit_id)
-    if row is None:
-        raise HTTPException(status_code=404, detail="Result not found")
-
-    document_path = Path(str(row["document_path"]))
+    document_path, row = get_content_unit(source_root_id, content_unit_id)
+    target = f"/documents/{source_root_id}/{content_unit_id}"
     if document_path.suffix.lower() == ".pdf" and row["page_number"]:
-        target = f"file://{quote(str(document_path))}#page={int(row['page_number'])}"
-    else:
-        target = f"file://{quote(str(document_path))}"
+        target += f"#page={int(row['page_number'])}"
     return RedirectResponse(url=target, status_code=307)
+
+
+@app.get("/documents/{source_root_id}/{content_unit_id}")
+async def serve_document(source_root_id: int, content_unit_id: int) -> FileResponse:
+    document_path, _row = get_content_unit(source_root_id, content_unit_id)
+    media_type, _encoding = mimetypes.guess_type(document_path.name)
+    return FileResponse(
+        path=document_path,
+        media_type=media_type or "application/octet-stream",
+        filename=document_path.name,
+        content_disposition_type="inline",
+    )

@@ -1,1 +1,1 @@
-"""Service layer for Searchy."""
+"""Service layer for SirChi."""

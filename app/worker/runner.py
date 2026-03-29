@@ -9,8 +9,20 @@ from app.db.source_store import SourceStore
 from app.services.ingest import build_units, parse_document
 
 
+def ensure_docling_available() -> None:
+    try:
+        from docling.document_converter import DocumentConverter  # type: ignore
+    except Exception as exc:
+        raise RuntimeError(
+            "Worker startup failed because Docling is not installed or could not be imported."
+        ) from exc
+
+    _ = DocumentConverter
+
+
 def run_forever() -> None:
     settings = get_settings()
+    ensure_docling_available()
     store = GlobalStore()
     while True:
         job = store.take_next_job()

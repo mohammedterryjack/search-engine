@@ -1,1 +1,1 @@
-"""Searchy application package."""
+"""SirChi application package."""

@@ -1,6 +1,6 @@
-# Searchy
+# SirChi
 
-Searchy is a local document search engine with:
+SirChi is a local document search engine with:
 
 - FastAPI web app
 - Google-like search UI
