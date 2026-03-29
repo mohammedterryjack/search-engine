@@ -9,6 +9,13 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
+    libglib2.0-0 \
+    libgl1 \
+    libsm6 \
+    libx11-6 \
+    libxext6 \
+    libxrender1 \
+    libxcb1 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml README.md /app/

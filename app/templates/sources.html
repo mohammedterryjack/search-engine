@@ -11,7 +11,7 @@
     <form action="/sources" method="post" class="source-form">
       <label for="source_path">Add whitelist path</label>
       <div class="source-hint">
-        Enter an absolute path under <code>{{ allowed_source_root }}</code>. SirChi reads those files directly inside Docker.
+        Enter an absolute path under <code>{{ allowed_source_root }}</code>, or use the native picker to fill the field.
       </div>
       {% if error %}
       <div class="form-error">{{ error }}</div>
@@ -19,6 +19,19 @@
       <div class="source-input-row">
         <input id="source_path" name="source_path" type="text" class="source-input" placeholder="/absolute/path/or/file" value="{{ source_path }}" required>
         <button type="submit" class="primary-button">Add Source</button>
+      </div>
+      <div class="picker-row">
+        <label class="picker-button">
+          <span>Choose File</span>
+          <input id="source_file_picker" type="file" class="native-picker" data-target="source_path">
+        </label>
+        <label class="picker-button">
+          <span>Choose Folder</span>
+          <input id="source_folder_picker" type="file" class="native-picker" webkitdirectory directory multiple data-target="source_path">
+        </label>
+      </div>
+      <div class="picker-note">
+        `Choose Folder` uses browser-native directory selection where supported. If your browser does not expose the real path, keep using the manual field.
       </div>
     </form>
   </section>
@@ -75,4 +88,39 @@
   </section>
   {% endfor %}
 </main>
+<script>
+  (function () {
+    const filePicker = document.getElementById("source_file_picker");
+    const folderPicker = document.getElementById("source_folder_picker");
+    const target = document.getElementById("source_path");
+    if (!target) return;
+
+    function assignFromFileInput(input, isFolder) {
+      if (!input || !input.files || !input.files.length) return;
+      const first = input.files[0];
+      const webkitPath = first.webkitRelativePath || "";
+      if (isFolder && webkitPath) {
+        const firstSegment = webkitPath.split("/")[0];
+        if (first.path) {
+          target.value = first.path.slice(0, first.path.lastIndexOf("/" + firstSegment) + firstSegment.length + 1);
+          return;
+        }
+      }
+      if (first.path) {
+        target.value = first.path;
+      }
+    }
+
+    if (filePicker) {
+      filePicker.addEventListener("change", function () {
+        assignFromFileInput(filePicker, false);
+      });
+    }
+    if (folderPicker) {
+      folderPicker.addEventListener("change", function () {
+        assignFromFileInput(folderPicker, true);
+      });
+    }
+  })();
+</script>
 {% endblock %}
