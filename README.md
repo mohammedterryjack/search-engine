@@ -24,16 +24,21 @@ With the default local configuration, runtime data lives under `~/.searchi/`.
 
 The Docker Compose setup still uses the repo-local `./data/` directory explicitly for development convenience.
 
-## CLI
+## HTTP API
 
-Text output:
-
-```bash
-uv run searchi "chaos attractor"
-```
-
-JSON output:
+You can hit the same `/search` endpoint that the UI uses directly with `curl`:
 
 ```bash
-uv run searchi "chaos attractor" --json
+curl -s -G http://localhost:18000/search --data-urlencode "q=chaos attractor"
 ```
+
+Use `unit_type` or `vector_min_score` as additional query parameters:
+
+```bash
+curl -s -G http://localhost:18000/search \
+  --data-urlencode "q=chaos attractor" \
+  --data-urlencode "unit_type=figure" \
+  --data-urlencode "vector_min_score=0.3"
+```
+
+Add `| jq` if you want the JSON response formatted.

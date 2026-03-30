@@ -5,6 +5,7 @@ import os
 import shutil
 import urllib.error
 import urllib.request
+from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urlencode
@@ -14,11 +15,13 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel, Field
 
 from app.config import get_settings
 from app.db.global_store import GlobalStore
 from app.db.source_store import SourceStore
 from app.services.ingest import list_supported_documents
+from app.models import SearchResponse, SearchResult
 from app.services.search import SearchPipelineError, search_all_sources
 from app.services.vector_store import (
     faiss_path_for_db,
@@ -35,6 +38,78 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 templates.env.filters["highlight_terms"] = highlight_terms
 templates.env.filters["truncate_text"] = truncate_text
+
+ALLOWED_UNIT_TYPES = ("section", "figure", "table")
+ALLOWED_UNIT_TYPE_SET = set(ALLOWED_UNIT_TYPES)
+
+
+@dataclass(slots=True)
+class SearchFilters:
+    source_ids: set[int]
+    unit_types: set[str]
+    vector_min_score: float
+
+
+class SearchApiFilters(BaseModel):
+    source_ids: list[int]
+    unit_types: list[str]
+    vector_min_score: float
+
+
+class SearchApiRequest(BaseModel):
+    q: str = ""
+    source: list[int] = Field(default_factory=list)
+    unit_type: list[str] = Field(default_factory=list)
+    vector_min_score: float | None = None
+
+
+class SearchApiResponse(BaseModel):
+    results: list[dict[str, object]]
+    warning: str | None = None
+    error: str | None = None
+    filters: SearchApiFilters
+
+
+def _normalize_unit_types(values: list[str] | None) -> set[str]:
+    normalized = {value for value in (values or []) if value in ALLOWED_UNIT_TYPE_SET}
+    return normalized if normalized else set(ALLOWED_UNIT_TYPES)
+
+
+def _build_search_filters(
+    source: list[int] | None,
+    unit_type: list[str] | None,
+    vector_min_score: float | None,
+) -> SearchFilters:
+    return SearchFilters(
+        source_ids=set(source or []),
+        unit_types=_normalize_unit_types(unit_type),
+        vector_min_score=(
+            vector_min_score if vector_min_score is not None else settings.vector_min_score_default
+        ),
+    )
+
+
+def _execute_search(query: str, filters: SearchFilters) -> tuple[SearchResponse, str | None]:
+    if not query:
+        return SearchResponse(results=[]), None
+    try:
+        response = search_all_sources(
+            query,
+            source_root_ids=filters.source_ids if filters.source_ids else None,
+            unit_types=filters.unit_types,
+            vector_min_score=filters.vector_min_score,
+        )
+        return response, None
+    except SearchPipelineError as exc:
+        return SearchResponse(results=[]), str(exc)
+
+
+def _serialize_search_results(results: list[SearchResult]) -> list[dict[str, object]]:
+    return [asdict(result) for result in results]
+
+
+def _order_unit_types(values: set[str]) -> list[str]:
+    return [value for value in ALLOWED_UNIT_TYPES if value in values]
 
 
 def format_bytes(size: int) -> str:
@@ -187,29 +262,10 @@ async def search(
     unit_type: list[str] | None = None,
     vector_min_score: float | None = None,
 ) -> HTMLResponse:
-    selected = set(source or [])
-    allowed_unit_types = {"section", "figure", "table"}
-    selected_unit_types = {
-        value for value in (unit_type or sorted(allowed_unit_types)) if value in allowed_unit_types
-    }
-    search_error = None
-    search_warning = None
-    results = []
-    effective_vector_min_score = (
-        vector_min_score if vector_min_score is not None else settings.vector_min_score_default
-    )
-    if q:
-        try:
-            response = search_all_sources(
-                q,
-                selected if selected else None,
-                unit_types=selected_unit_types if selected_unit_types else allowed_unit_types,
-                vector_min_score=effective_vector_min_score,
-            )
-            results = response.results
-            search_warning = response.warning
-        except SearchPipelineError as exc:
-            search_error = str(exc)
+    filters = _build_search_filters(source, unit_type, vector_min_score)
+    search_response, search_error = _execute_search(q, filters)
+    search_warning = search_response.warning
+    results = search_response.results
     store = GlobalStore()
     return templates.TemplateResponse(
         request,
@@ -218,16 +274,33 @@ async def search(
             "query": q,
             "results": results,
             "sources": store.list_source_roots(),
-            "selected_sources": selected,
-            "selected_unit_types": selected_unit_types,
-            "all_unit_types": ["section", "figure", "table"],
-            "vector_min_score": effective_vector_min_score,
+            "selected_sources": filters.source_ids,
+            "selected_unit_types": filters.unit_types,
+            "all_unit_types": list(ALLOWED_UNIT_TYPES),
+            "vector_min_score": filters.vector_min_score,
             "search_error": search_error,
             "search_warning": search_warning,
             "results_meta_label": None,
             "document_scope_title": None,
         },
     )
+
+
+@app.post("/api/search", response_model=SearchApiResponse)
+async def api_search(payload: SearchApiRequest) -> SearchApiResponse:
+    filters = _build_search_filters(payload.source, payload.unit_type, payload.vector_min_score)
+    search_response, search_error = _execute_search(payload.q, filters)
+    return SearchApiResponse(
+        results=_serialize_search_results(search_response.results),
+        warning=search_response.warning,
+        error=search_error,
+        filters=SearchApiFilters(
+            source_ids=sorted(filters.source_ids),
+            unit_types=_order_unit_types(filters.unit_types),
+            vector_min_score=filters.vector_min_score,
+        ),
+    )
+
 
 
 @app.get("/sources", response_class=HTMLResponse)
