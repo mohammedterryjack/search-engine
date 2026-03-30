@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from app.db.global_store import utc_now
+from app.config import get_settings
 from app.services.tokenize import term_frequencies
 
 
@@ -329,6 +330,7 @@ def build_display_text(caption: str, body: str, fallback: str) -> str:
 
 
 def build_units(parsed_units: list[ParsedUnit]) -> list[dict[str, object]]:
+    settings = get_settings()
     units: list[dict[str, object]] = []
     for unit in parsed_units:
         terms = term_frequencies(unit.display_text)
@@ -343,6 +345,7 @@ def build_units(parsed_units: list[ParsedUnit]) -> list[dict[str, object]]:
                 "display_text": unit.display_text,
                 "token_count": sum(terms.values()),
                 "terms": dict(terms),
+                "embedding_model": settings.vector_model_name,
                 "created_at": utc_now(),
             }
         )

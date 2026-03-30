@@ -1,18 +1,48 @@
 from __future__ import annotations
 
-from collections import Counter
+import os
+from functools import lru_cache
 
-from fastapi import FastAPI, Request
+import torch
+
+from fastapi import FastAPI, HTTPException, Request
+from sentence_transformers import CrossEncoder
 
 
 app = FastAPI(title="SirChi Reranker")
 
+MODEL_NAME = os.getenv("SEARCHY_RERANKER_MODEL", "cross-encoder/ms-marco-MiniLM-L4-v2")
+DEVICE = os.getenv("SEARCHY_RERANKER_DEVICE")
+MAX_LENGTH = int(os.getenv("SEARCHY_RERANKER_MAX_LENGTH", "512"))
+BATCH_SIZE = int(os.getenv("SEARCHY_RERANKER_BATCH_SIZE", "16"))
 
-def overlap_score(query: str, text: str, base_score: float) -> float:
-    query_terms = Counter(query.lower().split())
-    text_tokens = text.lower().split()
-    overlap = sum(query_terms[token] for token in text_tokens if token in query_terms)
-    return base_score + overlap * 0.15
+
+@lru_cache(maxsize=1)
+def get_model() -> CrossEncoder:
+    kwargs: dict[str, object] = {
+        "max_length": MAX_LENGTH,
+        "model_kwargs": {"torch_dtype": torch.float32},
+    }
+    if DEVICE:
+        kwargs["device"] = DEVICE
+    return CrossEncoder(MODEL_NAME, **kwargs)
+
+
+@app.on_event("startup")
+def warm_model() -> None:
+    get_model()
+
+
+@app.get("/health")
+async def health() -> dict[str, object]:
+    model = get_model()
+    return {
+        "status": "ok",
+        "model_name": MODEL_NAME,
+        "device": getattr(model.model, "device", "unknown").type if hasattr(model, "model") else "unknown",
+        "max_length": MAX_LENGTH,
+        "batch_size": BATCH_SIZE,
+    }
 
 
 @app.post("/rerank")
@@ -20,12 +50,22 @@ async def rerank(request: Request) -> list[dict[str, float | int]]:
     payload = await request.json()
     query = str(payload.get("query", ""))
     results = list(payload.get("results", []))
+    if not query.strip():
+        raise HTTPException(status_code=400, detail="query is required")
+
+    if not results:
+        return []
+
+    model = get_model()
+    pairs = [(query, str(item["display_text"])) for item in results]
+    scores = model.predict(pairs, batch_size=BATCH_SIZE, show_progress_bar=False)
+
     reranked = []
-    for item in results:
+    for item, score in zip(results, scores, strict=True):
         reranked.append(
             {
                 "content_unit_id": int(item["content_unit_id"]),
-                "score": overlap_score(query, str(item["display_text"]), float(item["score"])),
+                "score": float(score),
             }
         )
     reranked.sort(key=lambda item: item["score"], reverse=True)

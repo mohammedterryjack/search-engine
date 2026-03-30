@@ -1,355 +1,311 @@
 # Plan
 
-## Goal
+## Current Goal
 
-Build a local document search engine with:
+Build `SirChi`, a local document search engine with:
 
 - FastAPI backend
-- Simple web UI with a Google-like search page and results page
-- Lightweight Dockerfile and `docker-compose.yml`
-- Async ingestion pipeline that parses documents with Docling
-- SQLite-backed section-level retrieval
-- Multi-stage ranking:
+- Google-like web UI with `SirChi` branding
+- Docker Compose stack
+- SQLite storage
+- async ingestion worker
+- Docling-based document parsing
+- multi-stage retrieval:
   1. inverted index candidate retrieval
-  2. BM25 top 100 selection
-  3. cross-encoder reranking for final ordering
+  2. BM25 ranking
+  3. cross-encoder reranking
 
-This is a greenfield reset. The current repo should be treated as disposable implementation history unless a small piece is explicitly kept.
+## Current State
 
-## Product Scope
+The project is no longer at the planning-only stage. The following is already implemented:
 
-### Core user flows
+- FastAPI web app
+- source management UI
+- local source-path whitelist under `/Users`
+- one SQLite database per whitelisted source path
+- global SQLite metadata DB for source roots and ingestion jobs
+- background worker for ingestion jobs
+- Docling-based parsing with no silent text fallback
+- term normalization with stop-word removal and lemmatization
+- inverted index postings table
+- BM25 ranking in Python
+- separate reranker service using a real sentence-transformers cross-encoder
+- result highlighting
+- document open route served through FastAPI
 
-1. User opens the web app and sees a minimal search box.
-2. User submits a query.
-3. System retrieves relevant sections, figures, and tables from indexed documents.
-4. Results show:
-   - source document path
-   - page number
-   - section name
-   - stored text or caption
-   - highlighted query terms
-   - a link that opens the source document at the correct page
-5. User adds a whitelist source path.
-6. System ingests all supported documents in that file or directory path.
-7. Async worker parses documents with Docling and stores extracted units in SQLite.
-
-### Indexed content units
-
-Each extracted unit becomes a searchable record:
-
-- document section
-- figure caption
-- table caption
-- optionally standalone table text if Docling exposes it cleanly
-
-## Proposed Architecture
+## Implemented Architecture
 
 ### Services
 
-- `web`: FastAPI app serving API and HTML UI
-- `worker`: async ingestion worker
-- `reranker`: local cross-encoder scoring service or isolated container
+- `web`
+  - serves HTML UI and search endpoints
+  - validates source paths
+  - serves source documents inline
+- `worker`
+  - polls ingestion jobs
+  - parses documents with Docling
+  - writes `documents`, `content_units`, and `term_postings`
+- `reranker`
+  - loads a real cross-encoder model
+  - reranks top lexical results
 
-### Storage model
+### Storage
 
-- One SQLite database file per whitelisted source path
-- Each source path is isolated from the others at the storage layer
-- Search runs across all source databases by default, with source filtering in the UI
+#### App metadata DB
 
-### High-level flow
+Used for global coordination:
 
-1. User adds a whitelist source path.
-2. Web app creates or loads the SQLite database for that source.
-3. Web app creates ingestion jobs for all supported documents under that source.
-4. Worker reads jobs and runs Docling.
-5. Worker splits output into searchable units.
-6. Worker tokenizes units and writes:
-   - document metadata
-   - content units
-   - inverted index postings
-7. Query API tokenizes the search input.
-8. Inverted index fetches candidate content units across source DBs.
-9. BM25 ranks candidates and keeps top 100.
-10. Cross-encoder reranks those 100.
-11. UI renders results with highlights and source links.
+- `source_roots`
+- `ingestion_jobs`
 
-## Data Model
+#### Per-source SQLite DB
 
-### `source_roots`
+One DB per whitelist source path:
 
-Registry table in the app metadata database.
+- `documents`
+- `content_units`
+- `term_postings`
 
-- `id`
-- `source_path`
-- `source_type` (`file`, `directory`)
-- `db_path`
-- `status`
-- `created_at`
+### Indexed content units
 
-### `documents`
+The ingestion layer now attempts to emit:
 
-- `id`
-- `source_path`
-- `filename`
-- `file_checksum`
-- `status`
-- `page_count`
-- `created_at`
-- `updated_at`
+- `section`
+- `figure`
+- `table`
 
-### `content_units`
+Each unit stores:
 
-One row per section, figure, or table.
-
-- `id`
-- `document_id`
-- `unit_type` (`section`, `figure`, `table`)
+- `unit_type`
 - `page_number`
 - `section_name`
 - `anchor_key`
 - `text_content`
 - `caption`
 - `display_text`
-- `token_count`
-- `created_at`
+- token statistics for lexical retrieval
 
-`display_text` is the canonical field used by retrieval and UI. For sections it will usually mirror body text; for figures/tables it will usually be the caption or extracted text fallback.
+## Retrieval Pipeline
 
-### `term_postings`
+### Step 1: lexical normalization
 
-This is the explicit inverted index table.
+Implemented in [app/services/tokenize.py](/Users/mohammed/Code/search_engine/app/services/tokenize.py):
 
-- `term`
-- `content_unit_id`
-- `term_frequency`
-- `positions` or compact positional metadata if needed
+- regex tokenization
+- lowercase normalization
+- lemmatization via `simplemma`
+- stop-word removal
 
-Composite indexes:
+### Step 2: inverted index retrieval
 
-- `(term, content_unit_id)`
-- `(content_unit_id, term)`
+- query terms look up matching `content_unit_id`s in `term_postings`
+- only normalized non-stopword terms are used
 
-### `ingestion_jobs`
+### Step 3: BM25 ranking
 
-- `id`
-- `source_root_id`
-- `document_id`
-- `status`
-- `error_message`
-- `created_at`
-- `started_at`
-- `finished_at`
+- BM25 is computed in Python over candidate content units
+- uses indexed term frequencies and content-unit lengths
 
-### Duplicate handling
+### Step 4: reranking
 
-- A document is identified logically by its absolute file path within a source
-- A `documents` row prevents duplicate ingestion of the same file
-- There is no automatic change detection
-- If a file changes on disk after ingestion, the system ignores that change unless the user removes the document and ingests again
+- reranker service uses `cross-encoder/ms-marco-MiniLM-L4-v2`
+- search no longer silently falls back if reranking fails
+- reranker failures surface as explicit search errors in the UI
 
-## Search Pipeline
+## UI State
 
-### Step 1: candidate retrieval
+### Homepage
 
-- Normalize query terms
-- Remove stop words
-- Use `term_postings` to fetch matching `content_unit_id`s
-- Score initial candidates with term frequency and coverage
+- Google-like centered search box
+- `SirChi` branding
+- Chi background image styling
 
-### Step 2: BM25 ranking
+### Sources page
 
-- Run BM25 over candidate units using stored term frequencies and document-length statistics
-- Keep top 100 units
+- manual absolute-path source entry
+- native file picker
+- native folder picker where browser support exists
+- source clear and delete controls
+- per-source indexed-document list
+- ingestion job status list
 
-### Step 3: cross-encoder reranking
+### Results page
 
-- Use a lightweight sentence-transformers cross-encoder
-- Input: `(query, display_text)`
-- Return final ranked result list
+- top search bar
+- source filters
+- ranked result cards
+- highlighted terms
+- source document links served through the app
 
-### Result rendering
+## Open-document Behavior
 
-Each result should include:
+Current behavior:
 
-- title line from `section_name` or a derived label
-- source path
-- page number
-- snippet from `display_text`
-- highlighted query terms
-- open link to the source document at the correct page
+- result click goes to `/open/{source_root_id}/{content_unit_id}`
+- app redirects to `/documents/{source_root_id}/{content_unit_id}`
+- FastAPI serves the source file inline
+- PDFs append `#page=N` when page metadata is available
 
-## Docling Ingestion Plan
+Current limitation:
 
-### Parsing
+- exact in-document text-position jump is not implemented
+- page-level PDF opening is the current best-effort behavior
 
-- Use Docling to extract:
-  - document sections
-  - figures and captions
-  - tables and captions
-  - any other formats Docling supports
-  - page references when available
+## Ingestion Behavior
 
-### Normalization
+### Current rules
 
-- Convert parsed output into `content_units`
-- Preserve page number when Docling provides it
-- Derive `section_name` from heading hierarchy
-- Produce stable `anchor_key` values for deterministic linking
-- Store every section, figure, and table as its own row without additional semantic merging
+- no silent fallbacks during parsing
+- if Docling fails, the job fails explicitly
+- unsupported source files are not supposed to be enqueued
+- source files are treated as immutable once ingested
+- no automatic change detection or periodic reingestion
 
-### Async execution
+### Current source assumptions
 
-- Use a simple async worker with SQLite-backed job polling
-- Optimize for smooth local behavior instead of queue-system complexity
-- Avoid Redis/Celery in v1
+- whitelist source paths must be under `/Users`
+- containers read `/Users` read-only
 
-## Web App
+## Confirmed Remaining Work
 
-### UI shape
+The system is working, but it is not finished. These are the main items still left to do.
 
-- Homepage:
-  - centered `Searchy` branding
-  - large search box
-  - minimal controls
-- Results page:
-  - search bar at top
-  - ranked results list
-  - path, page number, and snippet per result
-  - source filter controls
-  - management view for clearing a source DB or removing a single document
+### 1. Verify and harden real Docling structure extraction
 
-### Implementation approach
+The code now attempts structured extraction for sections, figures, and tables, but this still needs validation against actual stored rows across multiple PDFs.
 
-- FastAPI serves both API and server-rendered HTML
-- Jinja templates plus minimal CSS/JS
-- Match Google’s layout and visual rhythm as closely as practical while branding it as `Searchy`
-- Avoid a separate frontend framework in v1
+Needed:
 
-## Open-document Links
+- inspect real `content_units` output for several sample documents
+- verify `unit_type` distribution
+- verify page numbers
+- verify figure captions
+- verify table text extraction quality
+- adjust extraction logic to the exact Docling schema behavior in practice
 
-We need a practical local strategy for opening documents at the correct page.
+### 2. Finish PDF runtime hardening
 
-### v1 approach
+Docling required extra system libraries during rollout.
 
-- Store absolute local source path
-- Generate links through a FastAPI route such as `/open/{content_unit_id}`
-- Route resolves the file path, page number, and anchor metadata
-- For PDFs, append `#page=N` for browser-supported viewers
-- Exact in-document section jump is best-effort; page-level opening is the reliable baseline
+Needed:
 
-Note:
-Direct page-specific opening behavior can vary by browser and local file handling. We should treat this as a compatibility area to verify early.
+- confirm current worker image has all required native libs for your PDF set
+- confirm parsing succeeds after rebuild on representative PDFs
+- add OCR dependencies only if scanned PDFs matter
 
-## Docker Plan
+### 3. Improve job visibility in UI
 
-### Containers
+Current ingestion errors are visible through job status, but the UI can still be improved.
 
-- `web`
-- `worker`
-- `reranker`
+Needed:
 
-### Requirements
+- clearer failed-job summaries
+- retry controls
+- per-source counters for pending/running/failed/done
+- better surfaced parser errors in the page itself
 
-- small Python base image
-- no unnecessary build tooling in final runtime image
-- mounted local document directory for ingestion
-- persistent app data volume for SQLite databases and model caches
+### 4. Add tests
 
-### Compose responsibilities
+Current automated test coverage is minimal.
 
-- run API
-- run worker
-- run reranker service when enabled
-- mount project source for local development
-- mount document source directory
+Needed:
 
-## Proposed Initial Tech Stack
+- token normalization tests
+- lemmatization tests
+- posting creation tests
+- BM25 ranking tests
+- reranker integration tests
+- ingestion job lifecycle tests
+- Docling extraction shape tests with fixed sample documents
 
-- Python 3.11+
-- FastAPI
-- Jinja2
-- SQLAlchemy or direct `sqlite3`
-- SQLite
-- Docling
-- `rank-bm25` or in-house BM25 implementation
-- sentence-transformers cross-encoder
-- Uvicorn
+### 5. Validate native picker behavior
 
-## Repo Reset Plan
+The native folder/file picker is best-effort in a browser context.
 
-### Phase 0
+Needed:
 
-- Create `plan.md`
-- Confirm scope of the reset
+- verify behavior in your actual preferred browser
+- decide whether manual absolute path remains the primary path-entry method
+- potentially remove the picker if it proves unreliable
 
-### Phase 1
+### 6. Add better operational visibility
 
-- Remove current terminal UI implementation and old indexing code
-- Replace project structure with:
-  - `app/api`
-  - `app/services`
-  - `app/db`
-  - `app/templates`
-  - `app/static`
-  - `app/worker`
+Needed:
 
-### Phase 2
+- health/readiness view for web, worker, reranker
+- source DB stats
+- document counts by source
+- searchable unit counts by type
 
-- Add Dockerfile and compose stack for web, worker, and db
-- Add FastAPI app skeleton
-- Add SQLite schema creation and per-source DB management
+### 7. Improve result presentation
 
-### Phase 3
+Needed:
 
-- Implement document ingestion job flow with Docling
-- Store parsed units and inverted index postings
+- better snippet extraction around matched terms
+- more precise page-aware previews
+- visible unit type labels for figures/tables when helpful
+- cleaner empty/error states
 
-### Phase 4
+### 8. Possible future retrieval enhancements
 
-- Implement search pipeline:
-  - candidate lookup
-  - BM25
-  - reranker
+Explicitly deferred for now:
 
-### Phase 5
+- synonym expansion
+- fuzzy lexical fallback when exact terms miss
+- embedding retrieval fallback
+- semantic query expansion
 
-- Implement UI and result highlighting
-- Implement open-document route
+### 9. Make indexing robust to noisy parsed text
 
-### Phase 6
+Doc parsing can produce lexical noise that hurts exact-term retrieval even when the right content was extracted.
 
-- Add tests for:
-  - tokenization
-  - posting creation
-  - BM25 ranking
-  - reranker integration boundaries
-  - ingestion job lifecycle
+Examples:
 
-## Risks And Early Decisions
+- words incorrectly joined together
+- words incorrectly split by spaces
+- ligature or unicode normalization issues
+- line-break artifacts inside words
+- OCR-style character substitutions
+- table/layout text with unstable token boundaries
 
-### Open questions to settle early
+Needed:
 
-- Exact Docling output shape for page-aware sections, figures, and tables
-- Whether figure/table extraction reliably includes page numbers
-- Which cross-encoder model is light enough for local Docker usage
-- Whether exact local open-at-location behavior is possible beyond page-level PDF jumps
+- add a text-cleaning layer before tokenization
+- normalize unicode and ligatures consistently
+- repair common intra-word spacing and line-break artifacts
+- consider indexing both the raw cleaned token stream and a de-noised auxiliary token stream
+- add heuristics for recovering likely split or merged words
+- add corpus-level diagnostics for noisy-token rates
+- add tests with representative bad parser outputs
+
+Goal:
+
+- make lexical retrieval resilient when Docling output is structurally correct but text segmentation is messy
+
+## Current Risks
 
 ### Main risk
 
-The biggest implementation risk is not the web app. It is the extraction fidelity from Docling and the cost of local reranking. We should validate both before spending time polishing the UI.
+The main remaining technical risk is extraction fidelity, not the web app.
 
-## Recommended Build Order
+Specifically:
 
-1. Reset repo structure.
-2. Stand up FastAPI + worker + reranker in Docker Compose.
-3. Create app metadata DB and per-source SQLite DB layout.
-4. Prove Docling ingestion on one sample document.
-5. Persist `documents`, `content_units`, and `term_postings`.
-6. Build raw retrieval across all source DBs.
-7. Add BM25.
-8. Add reranker.
-9. Add Google-like `Searchy` UI and highlighting.
-10. Add document removal and source-clear management views.
-11. Add open-at-page links.
-12. Harden with tests.
+- whether Docling emits reliable section/figure/table structure across your PDF corpus
+- whether page metadata is consistently present
+- whether table extraction quality is good enough for search snippets
+
+### Secondary risk
+
+The reranker is now real, but model startup cost and resource usage still need practical validation on your machine.
+
+## Recommended Next Steps
+
+1. Rebuild the stack after dependency/runtime changes.
+2. Reingest one representative PDF-heavy source.
+3. Inspect stored `content_units` for:
+   - sections
+   - figures
+   - tables
+   - page numbers
+4. Verify reranker health and result ordering.
+5. Add targeted tests around normalization and Docling extraction.

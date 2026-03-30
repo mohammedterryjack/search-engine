@@ -70,6 +70,13 @@ class SourceStore:
                     FOREIGN KEY(content_unit_id) REFERENCES content_units(id)
                 );
 
+                CREATE TABLE IF NOT EXISTS content_embeddings (
+                    content_unit_id INTEGER PRIMARY KEY,
+                    embedding_model TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    FOREIGN KEY(content_unit_id) REFERENCES content_units(id)
+                );
+
                 CREATE INDEX IF NOT EXISTS idx_documents_source_path
                 ON documents(source_path);
 
@@ -150,6 +157,10 @@ class SourceStore:
                     f"DELETE FROM term_postings WHERE content_unit_id IN ({placeholders})",
                     content_ids,
                 )
+                conn.execute(
+                    f"DELETE FROM content_embeddings WHERE content_unit_id IN ({placeholders})",
+                    content_ids,
+                )
             conn.execute("DELETE FROM content_units WHERE document_id = ?", (document_id,))
             for unit in units:
                 cursor = conn.execute(
@@ -181,6 +192,17 @@ class SourceStore:
                         """,
                         (term, content_unit_id, freq),
                     )
+                conn.execute(
+                    """
+                    INSERT OR REPLACE INTO content_embeddings(content_unit_id, embedding_model, updated_at)
+                    VALUES(?, ?, ?)
+                    """,
+                    (
+                        content_unit_id,
+                        unit["embedding_model"],
+                        unit["created_at"],
+                    ),
+                )
 
     def delete_document(self, document_id: int) -> None:
         with self.connect() as conn:
@@ -197,12 +219,17 @@ class SourceStore:
                     f"DELETE FROM term_postings WHERE content_unit_id IN ({placeholders})",
                     content_ids,
                 )
+                conn.execute(
+                    f"DELETE FROM content_embeddings WHERE content_unit_id IN ({placeholders})",
+                    content_ids,
+                )
             conn.execute("DELETE FROM content_units WHERE document_id = ?", (document_id,))
             conn.execute("DELETE FROM documents WHERE id = ?", (document_id,))
 
     def clear(self) -> None:
         with self.connect() as conn:
             conn.execute("DELETE FROM term_postings")
+            conn.execute("DELETE FROM content_embeddings")
             conn.execute("DELETE FROM content_units")
             conn.execute("DELETE FROM documents")
 
@@ -217,3 +244,38 @@ class SourceStore:
                 """,
                 (content_unit_id,),
             ).fetchone()
+
+    def all_content_unit_texts(self) -> list[tuple[int, str]]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT id, display_text
+                FROM content_units
+                ORDER BY id ASC
+                """
+            ).fetchall()
+        return [(int(row["id"]), str(row["display_text"])) for row in rows]
+
+    def content_units_by_ids(self, content_unit_ids: list[int]) -> list[sqlite3.Row]:
+        if not content_unit_ids:
+            return []
+        placeholders = ", ".join("?" for _ in content_unit_ids)
+        with self.connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT cu.id AS content_unit_id,
+                       cu.document_id,
+                       cu.unit_type,
+                       cu.page_number,
+                       cu.section_name,
+                       cu.display_text,
+                       cu.token_count,
+                       d.source_path AS document_path,
+                       d.filename
+                FROM content_units cu
+                JOIN documents d ON d.id = cu.document_id
+                WHERE cu.id IN ({placeholders})
+                """,
+                content_unit_ids,
+            ).fetchall()
+        return rows

@@ -11,6 +11,8 @@ class Settings:
     app_db_path: Path
     source_db_dir: Path
     allowed_source_root: Path
+    vector_model_name: str
+    enable_vector_retrieval: bool
     reranker_url: str
     enable_reranker: bool
     poll_seconds: float
@@ -25,6 +27,11 @@ def get_settings() -> Settings:
         os.getenv("SEARCHY_SOURCE_DB_DIR", str(data_dir / "source_dbs"))
     ).resolve()
     allowed_source_root = Path(os.getenv("SEARCHY_ALLOWED_SOURCE_ROOT", "/Users")).resolve()
+    vector_model_name = os.getenv(
+        "SEARCHY_VECTOR_MODEL",
+        "sentence-transformers/all-MiniLM-L6-v2",
+    )
+    enable_vector_retrieval = os.getenv("SEARCHY_ENABLE_VECTOR_RETRIEVAL", "1") == "1"
     reranker_url = os.getenv("SEARCHY_RERANKER_URL", "http://localhost:8010")
     enable_reranker = os.getenv("SEARCHY_ENABLE_RERANKER", "1") == "1"
     poll_seconds = float(os.getenv("SEARCHY_POLL_SECONDS", "3"))
@@ -34,6 +41,8 @@ def get_settings() -> Settings:
         app_db_path=app_db_path,
         source_db_dir=source_db_dir,
         allowed_source_root=allowed_source_root,
+        vector_model_name=vector_model_name,
+        enable_vector_retrieval=enable_vector_retrieval,
         reranker_url=reranker_url,
         enable_reranker=enable_reranker,
         poll_seconds=poll_seconds,

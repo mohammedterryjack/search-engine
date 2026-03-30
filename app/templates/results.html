@@ -25,6 +25,9 @@
     </form>
   </aside>
   <section class="results-column">
+    {% if search_error %}
+    <div class="form-error">{{ search_error }}</div>
+    {% endif %}
     {% if query %}
     <div class="results-meta">{{ results|length }} results</div>
     {% endif %}

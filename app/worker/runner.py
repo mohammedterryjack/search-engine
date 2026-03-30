@@ -7,6 +7,7 @@ from app.config import get_settings
 from app.db.global_store import GlobalStore, utc_now
 from app.db.source_store import SourceStore
 from app.services.ingest import build_units, parse_document
+from app.services.vector_store import get_embedding_model, rebuild_faiss_index
 
 
 def ensure_docling_available() -> None:
@@ -20,9 +21,15 @@ def ensure_docling_available() -> None:
     _ = DocumentConverter
 
 
+def ensure_vector_model_available() -> None:
+    _ = get_embedding_model()
+
+
 def run_forever() -> None:
     settings = get_settings()
     ensure_docling_available()
+    if settings.enable_vector_retrieval:
+        ensure_vector_model_available()
     store = GlobalStore()
     while True:
         job = store.take_next_job()
@@ -45,6 +52,8 @@ def run_forever() -> None:
                 updated_at=utc_now(),
             )
             source_store.replace_content_units(document_id, units)
+            if settings.enable_vector_retrieval:
+                rebuild_faiss_index(Path(str(source_root["db_path"])), source_store.all_content_unit_texts())
             store.mark_job_done(int(job["id"]))
         except Exception as exc:
             store.mark_job_failed(int(job["id"]), str(exc))

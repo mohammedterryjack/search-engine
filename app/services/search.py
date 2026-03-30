@@ -12,6 +12,11 @@ from app.db.global_store import GlobalStore
 from app.db.source_store import SourceStore
 from app.models import SearchResult
 from app.services.tokenize import normalized_terms
+from app.services.vector_store import query_faiss_index
+
+
+class SearchPipelineError(RuntimeError):
+    """Raised when an enabled search stage fails."""
 
 
 def bm25_score(
@@ -53,6 +58,7 @@ def search_all_sources(query: str, source_root_ids: set[int] | None = None) -> l
             source_root_id=int(source_root["id"]),
             source_path=str(source_root["source_path"]),
             db_path=Path(str(source_root["db_path"])),
+            query=query,
             terms=terms,
         )
         results.extend(source_results)
@@ -69,11 +75,38 @@ def search_source_db(
     source_root_id: int,
     source_path: str,
     db_path: Path,
+    query: str,
     terms: list[str],
 ) -> list[SearchResult]:
     if not db_path.exists():
         return []
 
+    store = SourceStore(db_path)
+    lexical_results = lexical_search_source_db(
+        source_root_id=source_root_id,
+        source_path=source_path,
+        db_path=db_path,
+        terms=terms,
+    )
+    semantic_results: list[SearchResult] = []
+    settings = get_settings()
+    if settings.enable_vector_retrieval:
+        semantic_results = semantic_search_source_db(
+            source_root_id=source_root_id,
+            source_path=source_path,
+            db_path=db_path,
+            query=query,
+        )
+    return fuse_results(lexical_results, semantic_results, limit=100)
+
+
+def lexical_search_source_db(
+    *,
+    source_root_id: int,
+    source_path: str,
+    db_path: Path,
+    terms: list[str],
+) -> list[SearchResult]:
     store = SourceStore(db_path)
     with store.connect() as conn:
         placeholders = ", ".join("?" for _ in terms)
@@ -152,6 +185,77 @@ def search_source_db(
     return scored[:100]
 
 
+def semantic_search_source_db(
+    *,
+    source_root_id: int,
+    source_path: str,
+    db_path: Path,
+    query: str,
+) -> list[SearchResult]:
+    store = SourceStore(db_path)
+    vector_hits = query_faiss_index(db_path, query, limit=100)
+    if not vector_hits:
+        return []
+    content_unit_ids = [content_unit_id for content_unit_id, _score in vector_hits]
+    rows = store.content_units_by_ids(content_unit_ids)
+    row_by_id = {int(row["content_unit_id"]): row for row in rows}
+    results: list[SearchResult] = []
+    for rank, (content_unit_id, score) in enumerate(vector_hits, start=1):
+        row = row_by_id.get(content_unit_id)
+        if row is None:
+            raise SearchPipelineError(
+                f"Vector index returned content_unit_id={content_unit_id}, but SQLite has no matching row."
+            )
+        results.append(
+            SearchResult(
+                source_root_id=source_root_id,
+                source_path=source_path,
+                document_id=int(row["document_id"]),
+                content_unit_id=content_unit_id,
+                document_path=str(row["document_path"]),
+                filename=str(row["filename"]),
+                unit_type=str(row["unit_type"]),
+                page_number=int(row["page_number"]) if row["page_number"] is not None else None,
+                section_name=str(row["section_name"]),
+                display_text=str(row["display_text"]),
+                score=float(score),
+            )
+        )
+    return results
+
+
+def fuse_results(
+    lexical_results: list[SearchResult],
+    semantic_results: list[SearchResult],
+    *,
+    limit: int,
+) -> list[SearchResult]:
+    if not lexical_results and not semantic_results:
+        return []
+
+    by_id: dict[int, SearchResult] = {}
+    fused_scores: dict[int, float] = {}
+    lexical_rank = {result.content_unit_id: rank for rank, result in enumerate(lexical_results, start=1)}
+    semantic_rank = {result.content_unit_id: rank for rank, result in enumerate(semantic_results, start=1)}
+
+    for result in lexical_results + semantic_results:
+        by_id[result.content_unit_id] = result
+
+    for content_unit_id in by_id:
+        score = 0.0
+        if content_unit_id in lexical_rank:
+            score += 1.0 / (60 + lexical_rank[content_unit_id])
+        if content_unit_id in semantic_rank:
+            score += 1.0 / (60 + semantic_rank[content_unit_id])
+        fused_scores[content_unit_id] = score
+
+    fused = list(by_id.values())
+    for result in fused:
+        result.score = fused_scores[result.content_unit_id]
+    fused.sort(key=lambda item: item.score, reverse=True)
+    return fused[:limit]
+
+
 def _term_doc_counts(conn: sqlite3.Connection, terms: list[str]) -> dict[str, int]:
     placeholders = ", ".join("?" for _ in terms)
     rows = conn.execute(
@@ -205,8 +309,24 @@ def rerank_results(query: str, results: list[SearchResult]) -> list[SearchResult
         scores = json.loads(body)
         by_id = {int(item["content_unit_id"]): float(item["score"]) for item in scores}
         for result in results:
-            result.score = by_id.get(result.content_unit_id, result.score)
+            if result.content_unit_id not in by_id:
+                raise SearchPipelineError(
+                    f"Reranker response did not include content_unit_id={result.content_unit_id}."
+                )
+            result.score = by_id[result.content_unit_id]
         results.sort(key=lambda item: item.score, reverse=True)
-    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, KeyError, TypeError, ValueError):
-        results.sort(key=lambda item: item.score, reverse=True)
+    except urllib.error.HTTPError as exc:
+        raise SearchPipelineError(
+            f"Reranker returned HTTP {exc.code} from {settings.reranker_url}."
+        ) from exc
+    except urllib.error.URLError as exc:
+        raise SearchPipelineError(
+            f"Could not reach reranker at {settings.reranker_url}: {exc.reason}."
+        ) from exc
+    except TimeoutError as exc:
+        raise SearchPipelineError("Reranker request timed out.") from exc
+    except json.JSONDecodeError as exc:
+        raise SearchPipelineError("Reranker returned invalid JSON.") from exc
+    except (KeyError, TypeError, ValueError) as exc:
+        raise SearchPipelineError(f"Invalid reranker response: {exc}.") from exc
     return results

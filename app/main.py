@@ -13,7 +13,7 @@ from app.config import get_settings
 from app.db.global_store import GlobalStore
 from app.db.source_store import SourceStore
 from app.services.ingest import list_supported_documents
-from app.services.search import search_all_sources
+from app.services.search import SearchPipelineError, search_all_sources
 from app.ui import highlight_terms, truncate_text
 
 
@@ -96,7 +96,13 @@ async def home(request: Request) -> HTMLResponse:
 @app.get("/search", response_class=HTMLResponse)
 async def search(request: Request, q: str = "", source: list[int] | None = None) -> HTMLResponse:
     selected = set(source or [])
-    results = search_all_sources(q, selected if selected else None) if q else []
+    search_error = None
+    results = []
+    if q:
+        try:
+            results = search_all_sources(q, selected if selected else None)
+        except SearchPipelineError as exc:
+            search_error = str(exc)
     store = GlobalStore()
     return templates.TemplateResponse(
         request,
@@ -106,6 +112,7 @@ async def search(request: Request, q: str = "", source: list[int] | None = None)
             "results": results,
             "sources": store.list_source_roots(),
             "selected_sources": selected,
+            "search_error": search_error,
         },
     )
 
