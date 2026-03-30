@@ -9,9 +9,6 @@
   </header>
 
   <section class="admin-card admin-card-with-image">
-    <div class="status-hero-wrapper">
-      <img src="{{ url_for('static', path='/images/status.png') }}" alt="" class="status-hero-image">
-    </div>
     <div class="source-hint">System health, model state, and aggregate indexing counts live here.</div>
     <div class="stats-grid">
       <div class="stat-tile">
@@ -38,6 +35,9 @@
         <div class="stat-label">Poll interval</div>
         <div class="stat-value">{{ poll_seconds }}s</div>
       </div>
+    </div>
+    <div class="status-image-container">
+      <img src="{{ url_for('static', path='/images/status.png') }}" alt="" class="status-hero-image">
     </div>
   </section>
 

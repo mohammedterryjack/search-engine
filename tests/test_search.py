@@ -11,6 +11,7 @@ from app.services.search import (
     fuse_results,
     lexical_search_source_db,
     rerank_results,
+    search_all_sources,
     semantic_search_source_db,
 )
 from app.services.tokenize import term_frequencies
@@ -314,3 +315,71 @@ def test_semantic_search_respects_unit_type_filter(monkeypatch, tmp_path: Path) 
     assert warning is None
     assert len(results) == 1
     assert results[0].unit_type == "figure"
+
+
+def test_search_all_sources_filters_unit_types(monkeypatch, tmp_path: Path) -> None:
+    doc_path = tmp_path / "paper.pdf"
+    doc_path.write_text("placeholder")
+    store = SourceStore(tmp_path / "source.sqlite3")
+    document_id = store.upsert_document(
+        document_path=doc_path,
+        status="indexed",
+        page_count=1,
+        created_at=utc_now(),
+        updated_at=utc_now(),
+    )
+    store.replace_content_units(
+        document_id,
+        [
+            {
+                "unit_type": "section",
+                "page_number": 1,
+                "section_name": "Section A",
+                "anchor_key": "section-1",
+                "text_content": "chaos attractor",
+                "caption": "",
+                "display_text": "chaos attractor",
+                "token_count": 2,
+                "created_at": utc_now(),
+                "terms": term_frequencies("chaos attractor"),
+                "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+            },
+            {
+                "unit_type": "figure",
+                "page_number": 1,
+                "section_name": "Figure A",
+                "anchor_key": "figure-1",
+                "text_content": "chaos attractor",
+                "caption": "Chaos figure",
+                "display_text": "Chaos figure",
+                "token_count": 2,
+                "created_at": utc_now(),
+                "terms": term_frequencies("chaos attractor"),
+                "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+            },
+        ],
+    )
+
+    class DummyGlobalStore:
+        def list_source_roots(self):  # type: ignore[override]
+            return [{"id": 1, "source_path": "/src", "db_path": str(store.db_path)}]
+
+    class DummySettings:
+        enable_reranker = False
+        vector_min_score_default = 0.2
+        enable_vector_retrieval = True
+        reranker_url = "http://localhost:8010"
+        status_token = "test"
+        enable_vector_retrieval = True
+        poll_seconds = 3
+        vector_model_name = "sentence-transformers/all-MiniLM-L6-v2"
+    monkeypatch.setattr("app.services.search.get_settings", lambda: DummySettings())
+    monkeypatch.setattr("app.services.search.GlobalStore", DummyGlobalStore)
+
+    response = search_all_sources(
+        query="chaos attractor",
+        unit_types={"figure"},
+    )
+
+    assert response.results
+    assert all(result.unit_type == "figure" for result in response.results)

@@ -54,7 +54,29 @@ def parse_document(document_path: Path) -> list[ParsedUnit]:
             "Docling is required for ingestion but is not available in the worker environment."
         ) from exc
 
+    PdfPipelineOptions = None
     try:
+        from docling.document_converter import PdfPipelineOptions  # type: ignore
+    except Exception:
+        PdfPipelineOptions = None
+
+    pdf_option = None
+    if PdfPipelineOptions is not None:
+        try:
+            pdf_option = PdfPipelineOptions(generate_picture_images=True)
+        except Exception:
+            pdf_option = None
+
+    pipeline_kwargs: dict[str, object] = {}
+    if pdf_option is not None:
+        pipeline_kwargs["pipeline_options"] = {"pdf": pdf_option}
+
+    try:
+        converter = DocumentConverter(**pipeline_kwargs) if pipeline_kwargs else DocumentConverter()
+        if pdf_option is not None and hasattr(converter, "pipeline_options"):
+            converter.pipeline_options.setdefault("pdf", pdf_option)
+        result = converter.convert(str(document_path))
+    except TypeError:
         converter = DocumentConverter()
         result = converter.convert(str(document_path))
     except Exception as exc:
@@ -64,7 +86,7 @@ def parse_document(document_path: Path) -> list[ParsedUnit]:
     if not markdown.strip():
         raise RuntimeError(f"Docling returned no extractable text for {document_path.name}.")
 
-    units = extract_structured_units(result.document, markdown)
+    units = extract_structured_units(result.document)
     if units:
         return units
 
@@ -92,58 +114,8 @@ def extract_markdown(result: object) -> str:
     return text if isinstance(text, str) else ""
 
 
-def split_sections(text: str) -> list[ParsedUnit]:
-    lines = [line.rstrip() for line in text.splitlines()]
-    units: list[ParsedUnit] = []
-    current_heading = "Document"
-    current_lines: list[str] = []
-    counter = 0
 
-    def flush() -> None:
-        nonlocal counter
-        body = "\n".join(line for line in current_lines if line.strip()).strip()
-        if not body:
-            return
-        counter += 1
-        units.append(
-            ParsedUnit(
-                unit_type="section",
-                page_number=None,
-                section_name=current_heading,
-                anchor_key=f"section-{counter}",
-                text_content=body,
-                caption="",
-                display_text=body,
-            )
-        )
-
-    for line in lines:
-        if line.startswith("#"):
-            flush()
-            current_lines = []
-            current_heading = line.lstrip("# ").strip() or "Section"
-            continue
-        current_lines.append(line)
-    flush()
-
-    if not units:
-        body = "\n".join(line for line in lines if line.strip()).strip()
-        if body:
-            units.append(
-                ParsedUnit(
-                    unit_type="section",
-                    page_number=1,
-                    section_name="Document",
-                    anchor_key="section-1",
-                    text_content=body,
-                    caption="",
-                    display_text=body,
-                )
-            )
-    return units
-
-
-def extract_structured_units(doc: Any, fallback_markdown: str) -> list[ParsedUnit]:
+def extract_structured_units(doc: Any) -> list[ParsedUnit]:
     units: list[ParsedUnit] = []
     current_section = "Document"
     seen_refs: set[str] = set()
@@ -238,9 +210,7 @@ def extract_structured_units(doc: Any, fallback_markdown: str) -> list[ParsedUni
                     )
                 )
 
-    if units:
-        return units
-    return split_sections(fallback_markdown)
+    return units
 
 
 def item_label(item: Any) -> str:

@@ -82,14 +82,6 @@
       input.addEventListener("input", sync);
       sync();
     });
-    document.querySelectorAll(".advanced-option input[type=\"checkbox\"]").forEach((checkbox) => {
-      checkbox.addEventListener("change", function () {
-        const form = this.form;
-        if (form) {
-          form.requestSubmit();
-        }
-      });
-    });
   })();
 </script>
 {% endblock %}
