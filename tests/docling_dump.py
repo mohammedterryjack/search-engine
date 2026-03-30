@@ -3,42 +3,9 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Sequence
 
-from app.services.ingest import extract_structured_units
-
-
-def build_docling_converter():
-    try:
-        from docling.document_converter import DocumentConverter
-    except ImportError as exc:  # pragma: no cover
-        raise RuntimeError("Missing Docling in the current environment.") from exc
-
-    PdfPipelineOptions = None
-    try:
-        from docling.document_converter import PdfPipelineOptions  # type: ignore
-
-        PdfPipelineOptions = PdfPipelineOptions
-    except Exception:
-        PdfPipelineOptions = None
-
-    pipeline_kwargs: dict[str, object] = {}
-    pdf_option = None
-    if PdfPipelineOptions is not None:
-        try:
-            pdf_option = PdfPipelineOptions(generate_picture_images=True)
-        except Exception:
-            pdf_option = None
-    if pdf_option is not None:
-        pipeline_kwargs["pipeline_options"] = {"pdf": pdf_option}
-
-    try:
-        converter = DocumentConverter(**pipeline_kwargs) if pipeline_kwargs else DocumentConverter()
-    except TypeError:
-        converter = DocumentConverter()
-    if pdf_option is not None and hasattr(converter, "pipeline_options"):
-        converter.pipeline_options.setdefault("pdf", pdf_option)  # type: ignore[attr-defined]
-    return converter
+from app.services.ingest import build_docling_converter, extract_structured_units
 
 
 def print_items(document: object, *, max_items: int = 100) -> None:

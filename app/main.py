@@ -240,6 +240,7 @@ async def sources_view(
     store = GlobalStore()
     store.touch_service_heartbeat("web", "sources")
     rows = []
+    overall_unit_counts = {"section": 0, "figure": 0, "table": 0}
     global_job_counts = store.job_status_counts()
     running_jobs = [job for job in store.list_jobs() if str(job["status"]) == "running"][:10]
     for source in store.list_source_roots():
@@ -250,10 +251,22 @@ async def sources_view(
         vector_status = str(vector_report["status"])
         if vector_status == "mismatch" and (job_counts["pending"] or job_counts["running"]):
             vector_status = "syncing"
+        stats = source_store.stats()
+        if stats:
+            counts = stats["unit_type_counts"]
+            overall_unit_counts["section"] += int(counts.get("section", 0))
+            overall_unit_counts["figure"] += int(counts.get("figure", 0))
+            overall_unit_counts["table"] += int(counts.get("table", 0))
+        documents = []
+        for document in source_store.list_documents():
+            counts = source_store.document_unit_counts(int(document["id"]))
+            documents.append(
+                {"record": document, "unit_counts": counts},
+            )
         rows.append(
             {
                 "source": source,
-                "documents": source_store.list_documents(),
+                "documents": documents,
                 "jobs": store.list_jobs(int(source["id"]))[:10],
                 "job_counts": job_counts,
                 "stats": source_store.stats(),
@@ -274,9 +287,10 @@ async def sources_view(
             "success": success,
             "source_path": source_path,
             "allowed_source_root": settings.allowed_source_root,
-            "format_bytes": format_bytes,
-        },
-    )
+        "format_bytes": format_bytes,
+        "overall_unit_counts": overall_unit_counts,
+    },
+)
 
 
 @app.get("/status", response_class=HTMLResponse)
@@ -339,22 +353,24 @@ async def document_results_view(request: Request, source_root_id: int, document_
 
     from app.models import SearchResult
 
-    results = [
-        SearchResult(
-            source_root_id=source_root_id,
-            source_path=str(source_root["source_path"]),
-            document_id=int(row["document_id"]),
-            content_unit_id=int(row["content_unit_id"]),
-            document_path=str(row["document_path"]),
-            filename=str(row["filename"]),
-            unit_type=str(row["unit_type"]),
-            page_number=int(row["page_number"]) if row["page_number"] is not None else None,
-            section_name=str(row["section_name"]),
-            display_text=str(row["display_text"]),
-            score=0.0,
-        )
-        for row in rows
-    ]
+        results = [
+            SearchResult(
+                source_root_id=source_root_id,
+                source_path=str(source_root["source_path"]),
+                document_id=int(row["document_id"]),
+                content_unit_id=int(row["content_unit_id"]),
+                document_path=str(row["document_path"]),
+                filename=str(row["filename"]),
+                unit_type=str(row["unit_type"]),
+                page_number=int(row["page_number"]) if row["page_number"] is not None else None,
+                section_name=str(row["section_name"]),
+                display_text=str(row["display_text"]),
+                image_mime=row["image_mime"],
+                image_data=row["image_data"],
+                score=0.0,
+            )
+            for row in rows
+        ]
     return templates.TemplateResponse(
         request,
         "results.html",

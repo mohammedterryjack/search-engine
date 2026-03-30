@@ -1,7 +1,8 @@
 ### Fixes
-  sensible results
-  settings filters working
   images in documents displayed
+
+  chunks by section?
+  settings filters working
 
 ### CLI behaviour
   uv run searchi "chaos attractor" --json

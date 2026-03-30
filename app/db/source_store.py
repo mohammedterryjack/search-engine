@@ -59,6 +59,8 @@ class SourceStore:
                     caption TEXT NOT NULL,
                     display_text TEXT NOT NULL,
                     token_count INTEGER NOT NULL,
+                    image_mime TEXT,
+                    image_data TEXT,
                     created_at TEXT NOT NULL,
                     FOREIGN KEY(document_id) REFERENCES documents(id)
                 );
@@ -88,6 +90,15 @@ class SourceStore:
                 ON term_postings(content_unit_id);
                 """
             )
+            self._ensure_column(conn, "content_units", "image_mime", "TEXT")
+            self._ensure_column(conn, "content_units", "image_data", "TEXT")
+
+
+    def _ensure_column(self, conn: sqlite3.Connection, table: str, column: str, column_type: str) -> None:
+        rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+        existing_columns = {row["name"] for row in rows}
+        if column not in existing_columns:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_type}")
 
     def has_document(self, document_path: Path) -> bool:
         with self.connect() as conn:
@@ -164,12 +175,15 @@ class SourceStore:
                 )
             conn.execute("DELETE FROM content_units WHERE document_id = ?", (document_id,))
             for unit in units:
+                image_mime = unit.get("image_mime")
+                image_data = unit.get("image_data")
                 cursor = conn.execute(
                     """
                     INSERT INTO content_units(
                         document_id, unit_type, page_number, section_name, anchor_key,
-                        text_content, caption, display_text, token_count, created_at
-                    ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        text_content, caption, display_text, token_count, created_at,
+                        image_mime, image_data
+                    ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         document_id,
@@ -182,6 +196,8 @@ class SourceStore:
                         unit["display_text"],
                         unit["token_count"],
                         unit["created_at"],
+                        image_mime,
+                        image_data,
                     ),
                 )
                 content_unit_id = int(cursor.lastrowid)
@@ -212,6 +228,23 @@ class SourceStore:
                 (document_id,),
             ).fetchall()
         return [int(row["id"]) for row in rows]
+
+    def document_unit_counts(self, document_id: int) -> dict[str, int]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT unit_type, COUNT(*) AS count
+                FROM content_units
+                WHERE document_id = ?
+                GROUP BY unit_type
+                """,
+                (document_id,),
+            ).fetchall()
+        counts = {"section": 0, "figure": 0, "table": 0}
+        for row in rows:
+            unit_type = str(row["unit_type"])
+            counts[unit_type] = int(row["count"])
+        return counts
 
     def delete_document(self, document_id: int) -> None:
         with self.connect() as conn:
@@ -290,6 +323,8 @@ class SourceStore:
                        cu.page_number,
                        cu.section_name,
                        cu.display_text,
+                       cu.image_mime,
+                       cu.image_data,
                        cu.token_count,
                        d.source_path AS document_path,
                        d.filename
@@ -299,7 +334,7 @@ class SourceStore:
                 """,
                 content_unit_ids,
             ).fetchall()
-        return rows
+            return rows
 
     def content_units_for_document(self, document_id: int) -> list[sqlite3.Row]:
         with self.connect() as conn:
@@ -312,6 +347,8 @@ class SourceStore:
                     cu.page_number,
                     cu.section_name,
                     cu.display_text,
+                    cu.image_mime,
+                    cu.image_data,
                     d.source_path AS document_path,
                     d.filename
                 FROM content_units cu

@@ -85,11 +85,12 @@ Create one ingestion job per document
     |
     v
 Worker polls next pending job
-    |
-    v
-Docling parses document
-    |
-    v
+                    |
+                    v
+                Docling parses document
+                (PDF pipeline now generates embedded picture images)
+                    |
+                    v
 Structured extraction attempts:
     - sections
     - figures
@@ -187,7 +188,7 @@ Purpose:
 Tables:
 
 - `documents`
-- `content_units`
+- `content_units` – stores sections/figures/tables plus the `image_mime`/`image_data` columns used to show figure previews for matching results.
 - `term_postings`
 - `content_embeddings`
 

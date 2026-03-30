@@ -23,6 +23,62 @@ SUPPORTED_EXTENSIONS = {
     ".xlsx",
 }
 
+DATA_IMAGE_RE = re.compile(
+    r"data:(?P<mime>image/[^;]+);base64,(?P<data>[A-Za-z0-9+/=\s]+)", re.IGNORECASE
+)
+MARKDOWN_IMAGE_RE = re.compile(r"!\[[^\]]*\]\([^)]*\)", re.IGNORECASE)
+HTML_IMAGE_RE = re.compile(r"<img[^>]*>", re.IGNORECASE)
+
+
+def extract_image_data(text: str) -> tuple[str | None, str | None]:
+    if not text:
+        return None, None
+    match = DATA_IMAGE_RE.search(text)
+    if not match:
+        return None, None
+    data = "".join(match.group("data").split())
+    mime = match.group("mime")
+    if not data:
+        return None, None
+    return mime, data
+
+
+def strip_image_markup(text: str) -> str:
+    if not text:
+        return ""
+    cleaned = MARKDOWN_IMAGE_RE.sub(" ", text)
+    cleaned = HTML_IMAGE_RE.sub(" ", cleaned)
+    return " ".join(cleaned.split())
+
+
+def build_docling_converter():
+    try:
+        from docling.datamodel.document import InputFormat
+        from docling.document_converter import DocumentConverter, PdfFormatOption
+    except Exception as exc:
+        raise RuntimeError(
+            "Docling is required for ingestion but is not available in the worker environment."
+        ) from exc
+
+    pipeline_options = None
+    try:
+        from docling.pipeline.standard_pdf_pipeline import ThreadedPdfPipelineOptions
+
+        pipeline_options = ThreadedPdfPipelineOptions(generate_picture_images=True)
+    except Exception:
+        try:
+            from docling.datamodel.pipeline_options import PdfPipelineOptions
+
+            pipeline_options = PdfPipelineOptions(generate_picture_images=True)
+        except Exception:
+            pipeline_options = None
+
+    format_options: dict[InputFormat, PdfFormatOption] = {}
+    if pipeline_options is not None:
+        format_options[InputFormat.PDF] = PdfFormatOption(pipeline_options=pipeline_options)
+
+    return DocumentConverter(format_options=format_options) if format_options else DocumentConverter()
+
 
 @dataclass(slots=True)
 class ParsedUnit:
@@ -33,6 +89,8 @@ class ParsedUnit:
     text_content: str
     caption: str
     display_text: str
+    image_mime: str | None = None
+    image_data: str | None = None
 
 
 def list_supported_documents(source_path: Path) -> list[Path]:
@@ -47,37 +105,8 @@ def list_supported_documents(source_path: Path) -> list[Path]:
 
 
 def parse_document(document_path: Path) -> list[ParsedUnit]:
+    converter = build_docling_converter()
     try:
-        from docling.document_converter import DocumentConverter  # type: ignore
-    except Exception as exc:
-        raise RuntimeError(
-            "Docling is required for ingestion but is not available in the worker environment."
-        ) from exc
-
-    PdfPipelineOptions = None
-    try:
-        from docling.document_converter import PdfPipelineOptions  # type: ignore
-    except Exception:
-        PdfPipelineOptions = None
-
-    pdf_option = None
-    if PdfPipelineOptions is not None:
-        try:
-            pdf_option = PdfPipelineOptions(generate_picture_images=True)
-        except Exception:
-            pdf_option = None
-
-    pipeline_kwargs: dict[str, object] = {}
-    if pdf_option is not None:
-        pipeline_kwargs["pipeline_options"] = {"pdf": pdf_option}
-
-    try:
-        converter = DocumentConverter(**pipeline_kwargs) if pipeline_kwargs else DocumentConverter()
-        if pdf_option is not None and hasattr(converter, "pipeline_options"):
-            converter.pipeline_options.setdefault("pdf", pdf_option)
-        result = converter.convert(str(document_path))
-    except TypeError:
-        converter = DocumentConverter()
         result = converter.convert(str(document_path))
     except Exception as exc:
         raise RuntimeError(f"Docling failed to parse {document_path.name}: {exc}") from exc
@@ -118,8 +147,36 @@ def extract_markdown(result: object) -> str:
 def extract_structured_units(doc: Any) -> list[ParsedUnit]:
     units: list[ParsedUnit] = []
     current_section = "Document"
+    current_section_anchor: str | None = None
+    section_page: int | None = None
+    section_buffer: list[str] = []
     seen_refs: set[str] = set()
     iterate_items = getattr(doc, "iterate_items", None)
+    section_counter = 0
+
+    def flush_section() -> None:
+        nonlocal section_buffer, section_page, current_section_anchor, section_counter
+        body = "\n\n".join(line for line in section_buffer if line.strip()).strip()
+        if not body:
+            section_buffer = []
+            section_page = None
+            return
+        section_counter += 1
+        anchor = current_section_anchor or f"section-{section_counter}"
+        units.append(
+            ParsedUnit(
+                unit_type="section",
+                page_number=section_page,
+                section_name=current_section,
+                anchor_key=anchor,
+                text_content=body,
+                caption="",
+                display_text=body,
+            )
+        )
+        section_buffer = []
+        section_page = None
+        current_section_anchor = None
 
     if callable(iterate_items):
         for item, _level in iterate_items(
@@ -138,18 +195,11 @@ def extract_structured_units(doc: Any) -> list[ParsedUnit]:
             if label in {"title", "section_header"}:
                 heading = text_from_item(item)
                 if heading:
+                    flush_section()
                     current_section = heading
-                    units.append(
-                        ParsedUnit(
-                            unit_type="section",
-                            page_number=page_number,
-                            section_name=heading,
-                            anchor_key=anchor_from_ref(item_ref),
-                            text_content=heading,
-                            caption="",
-                            display_text=heading,
-                        )
-                    )
+                    current_section_anchor = anchor_from_ref(item_ref)
+                    section_page = page_number
+                    section_buffer = [heading]
                 continue
 
             if label in {
@@ -159,37 +209,36 @@ def extract_structured_units(doc: Any) -> list[ParsedUnit]:
                 "formula",
                 "code",
                 "caption",
-                "page_header",
-                "page_footer",
             }:
                 body = text_from_item(item)
                 if body:
-                    units.append(
-                        ParsedUnit(
-                            unit_type="section",
-                            page_number=page_number,
-                            section_name=current_section,
-                            anchor_key=anchor_from_ref(item_ref),
-                            text_content=body,
-                            caption="",
-                            display_text=body,
-                        )
-                    )
+                    if not section_buffer:
+                        current_section_anchor = current_section_anchor or anchor_from_ref(item_ref)
+                        section_page = section_page or page_number
+                    section_buffer.append(body)
                 continue
 
             if label in {"picture", "chart"}:
                 caption = caption_from_item(item, doc)
                 picture_text = markdown_from_item(item, doc)
-                display = build_display_text(caption, picture_text, fallback=f"Figure in {current_section}")
+                cleaned_picture_text = strip_image_markup(picture_text)
+                image_mime, image_data = extract_image_data(picture_text)
+                display = build_display_text(
+                    caption,
+                    cleaned_picture_text,
+                    fallback=f"Figure in {current_section}",
+                )
                 units.append(
                     ParsedUnit(
                         unit_type="figure",
                         page_number=page_number,
                         section_name=current_section,
                         anchor_key=anchor_from_ref(item_ref),
-                        text_content=picture_text,
+                        text_content=display,
                         caption=caption,
                         display_text=display,
+                        image_mime=image_mime,
+                        image_data=image_data,
                     )
                 )
                 continue
@@ -208,8 +257,9 @@ def extract_structured_units(doc: Any) -> list[ParsedUnit]:
                         caption=caption,
                         display_text=display,
                     )
-                )
+                    )
 
+    flush_section()
     return units
 
 
@@ -317,6 +367,8 @@ def build_units(parsed_units: list[ParsedUnit]) -> list[dict[str, object]]:
                 "terms": dict(terms),
                 "embedding_model": settings.vector_model_name,
                 "created_at": utc_now(),
+                "image_mime": unit.image_mime,
+                "image_data": unit.image_data,
             }
         )
     return units

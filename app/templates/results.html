@@ -99,6 +99,16 @@
         {% endif %}
       </div>
       <p class="result-snippet">{{ result.display_text|truncate_text|highlight_terms(query)|safe }}</p>
+      {% if result.image_data %}
+      <div class="result-figure">
+        <img
+          src="data:{{ result.image_mime or 'image/png' }};base64,{{ result.image_data }}"
+          alt="{{ (result.section_name or result.filename)|e }}"
+          loading="lazy"
+          decoding="async"
+        >
+      </div>
+      {% endif %}
     </article>
     {% else %}
     {% if query %}

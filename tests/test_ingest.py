@@ -79,7 +79,7 @@ def test_extract_structured_units_handles_sections_figures_and_tables() -> None:
         ]
     )
 
-    units = extract_structured_units(doc, fallback_markdown="")
+    units = extract_structured_units(doc)
     unit_types = [unit.unit_type for unit in units]
     assert "section" in unit_types
     assert "figure" in unit_types

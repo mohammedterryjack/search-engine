@@ -16,6 +16,8 @@ class SearchResult:
     section_name: str
     display_text: str
     score: float
+    image_mime: str | None = None
+    image_data: str | None = None
 
 
 @dataclass(slots=True)

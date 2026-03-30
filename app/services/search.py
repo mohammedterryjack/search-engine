@@ -146,6 +146,8 @@ def lexical_search_source_db(
                 cu.page_number,
                 cu.section_name,
                 cu.display_text,
+                cu.image_mime,
+                cu.image_data,
                 cu.token_count,
                 d.source_path AS document_path,
                 d.filename,
@@ -178,6 +180,8 @@ def lexical_search_source_db(
                 "document_path": str(row["document_path"]),
                 "filename": str(row["filename"]),
                 "token_count": int(row["token_count"]),
+                "image_mime": row["image_mime"],
+                "image_data": row["image_data"],
                 "term_freqs": {},
             },
         )
@@ -206,6 +210,8 @@ def lexical_search_source_db(
                 section_name=str(entry["section_name"]),
                 display_text=str(entry["display_text"]),
                 score=score,
+                image_mime=entry["image_mime"],
+                image_data=entry["image_data"],
             )
         )
     scored.sort(key=lambda item: item.score, reverse=True)
@@ -253,6 +259,8 @@ def semantic_search_source_db(
                 section_name=str(row["section_name"]),
                 display_text=str(row["display_text"]),
                 score=float(score),
+                image_mime=row["image_mime"],
+                image_data=row["image_data"],
             )
         )
     warning = None

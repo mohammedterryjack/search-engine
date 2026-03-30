@@ -170,15 +170,38 @@
       {% endfor %}
     </div>
 
+    <section class="admin-card">
+      <h3>Extraction totals</h3>
+      <div class="stats-grid">
+        <div class="stat-tile">
+          <div class="stat-label">Sections</div>
+          <div class="stat-value">{{ overall_unit_counts.section }}</div>
+        </div>
+        <div class="stat-tile">
+          <div class="stat-label">Figures</div>
+          <div class="stat-value">{{ overall_unit_counts.figure }}</div>
+        </div>
+        <div class="stat-tile">
+          <div class="stat-label">Tables</div>
+          <div class="stat-value">{{ overall_unit_counts.table }}</div>
+        </div>
+      </div>
+    </section>
+
     <div class="documents-block">
       <h3>Indexed Documents</h3>
       {% for document in row.documents %}
       <div class="document-row">
         <div>
-          <div class="document-title"><a href="/sources/{{ row.source.id }}/documents/{{ document.id }}" class="document-link">{{ document.filename }}</a></div>
-          <div class="document-meta">{{ document.source_path }}</div>
+          <div class="document-title"><a href="/sources/{{ row.source.id }}/documents/{{ document.record.id }}" class="document-link">{{ document.record.filename }}</a></div>
+          <div class="document-meta">{{ document.record.source_path }}</div>
+          <div class="document-meta document-unit-stats">
+            <span>{{ document.unit_counts.section }} sections</span>
+            <span>{{ document.unit_counts.figure }} figures</span>
+            <span>{{ document.unit_counts.table }} tables</span>
+          </div>
         </div>
-        <form action="/sources/{{ row.source.id }}/documents/{{ document.id }}/delete" method="post">
+        <form action="/sources/{{ row.source.id }}/documents/{{ document.record.id }}/delete" method="post">
           <button type="submit" class="text-button">Remove</button>
         </form>
       </div>
