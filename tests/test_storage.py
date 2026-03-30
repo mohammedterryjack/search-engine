@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from app.config import get_settings
 from app.db.global_store import GlobalStore, utc_now
 from app.db.source_store import SourceStore
 from app.services.tokenize import term_frequencies
@@ -14,6 +15,7 @@ def configure_env(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("SEARCHY_APP_DB_PATH", str(data_dir / "app.sqlite3"))
     monkeypatch.setenv("SEARCHY_SOURCE_DB_DIR", str(data_dir / "source_dbs"))
     monkeypatch.setenv("SEARCHY_ALLOWED_SOURCE_ROOT", str(tmp_path))
+    get_settings.cache_clear()
 
 
 def test_global_store_job_retry_lifecycle(monkeypatch, tmp_path: Path) -> None:

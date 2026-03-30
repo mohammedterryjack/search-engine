@@ -1,9 +1,9 @@
 {% extends "base.html" %}
-{% block title %}Sources - SearChi{% endblock %}
+{% block title %}Sources - searChi{% endblock %}
 {% block body %}
 <main class="admin-shell">
   <header class="admin-header">
-    <a href="/" class="brand brand-small">SearChi</a>
+    <a href="/" class="brand brand-small">searChi</a>
     <h1>Sources</h1>
     <a href="/status" class="secondary-link">Status</a>
   </header>
@@ -57,23 +57,17 @@
     <form action="/sources" method="post" class="source-form">
       <label for="source_path">Add whitelist path</label>
       <div class="source-hint">
-        Enter an absolute path under <code>{{ allowed_source_root }}</code>. You can also double-click the path field to try a browser-native picker.
+        Enter an absolute path under <code>{{ allowed_source_root }}</code>. Manual absolute paths are the only supported way to add a source.
       </div>
       {% if error %}
       <div class="form-error">{{ error }}</div>
       {% endif %}
+      {% if success %}
+      <div class="form-success">{{ success }}</div>
+      {% endif %}
       <div class="source-input-row">
         <input id="source_path" name="source_path" type="text" class="source-input" placeholder="/absolute/path/or/file" value="{{ source_path }}" required>
         <button type="submit" class="primary-button">Add Source</button>
-      </div>
-      <div class="picker-row picker-row-hidden" id="picker_mode_row" aria-hidden="true">
-        <button type="button" class="picker-choice" data-picker-target="file">Pick File</button>
-        <button type="button" class="picker-choice" data-picker-target="folder">Pick Folder</button>
-      </div>
-      <input id="source_file_picker" type="file" class="native-picker-hidden">
-      <input id="source_folder_picker" type="file" class="native-picker-hidden" webkitdirectory directory multiple>
-      <div class="picker-note" id="picker_note">
-        If the browser picker does not populate a real absolute path, paste the path manually. Web apps cannot reliably read host filesystem paths from native pickers in every browser.
       </div>
     </form>
   </section>
@@ -139,9 +133,9 @@
         <div class="stat-value">{{ "Present" if row.stats.faiss_exists else "Missing" }}</div>
         <div class="small-status">{{ format_bytes(row.stats.faiss_size_bytes) if row.stats.faiss_exists else "0 B" }}</div>
       </div>
-      <div class="stat-tile {{ 'status-ok' if row.vector_report.status == 'ok' else 'status-bad' }}">
+      <div class="stat-tile {{ 'status-ok' if row.vector_status == 'ok' else 'status-neutral' if row.vector_status == 'syncing' else 'status-bad' }}">
         <div class="stat-label">Vector sync</div>
-        <div class="stat-value">{{ row.vector_report.status|capitalize }}</div>
+        <div class="stat-value">{{ row.vector_status|capitalize }}</div>
         <div class="small-status">
           Missing {{ row.vector_report.missing_in_faiss|length }} / Stale {{ row.vector_report.stale_in_faiss|length }}
         </div>
@@ -199,95 +193,4 @@
   </section>
   {% endfor %}
 </main>
-<script>
-  (function () {
-    const filePicker = document.getElementById("source_file_picker");
-    const folderPicker = document.getElementById("source_folder_picker");
-    const target = document.getElementById("source_path");
-    const form = target ? target.closest("form") : null;
-    const pickerNote = document.getElementById("picker_note");
-    const pickerModeRow = document.getElementById("picker_mode_row");
-    if (!target || !form) return;
-
-    function setPickerNote(message, isError) {
-      if (!pickerNote) return;
-      pickerNote.textContent = message;
-      pickerNote.classList.toggle("picker-note-error", Boolean(isError));
-    }
-
-    function showPickerChoices() {
-      if (!pickerModeRow) return;
-      pickerModeRow.classList.remove("picker-row-hidden");
-      pickerModeRow.setAttribute("aria-hidden", "false");
-      setPickerNote("Choose whether you want to add a file or a folder.", false);
-    }
-
-    function hidePickerChoices() {
-      if (!pickerModeRow) return;
-      pickerModeRow.classList.add("picker-row-hidden");
-      pickerModeRow.setAttribute("aria-hidden", "true");
-    }
-
-    function extractAbsolutePath(input, isFolder) {
-      if (!input || !input.files || !input.files.length) return "";
-      const first = input.files[0];
-      const rawPath = typeof first.path === "string" ? first.path : "";
-      if (!rawPath) return "";
-      if (!isFolder) return rawPath;
-      const normalizedPath = rawPath.replace(/\\/g, "/");
-      const webkitPath = first.webkitRelativePath || "";
-      if (!webkitPath) return normalizedPath;
-      const firstSegment = webkitPath.split("/")[0];
-      const suffix = "/" + firstSegment;
-      const cutoff = normalizedPath.lastIndexOf(suffix);
-      if (cutoff === -1) return normalizedPath;
-      return normalizedPath.slice(0, cutoff + suffix.length);
-    }
-
-    function assignFromFileInput(input, isFolder) {
-      if (!input || !input.files || !input.files.length) return;
-      const resolvedPath = extractAbsolutePath(input, isFolder);
-      if (!resolvedPath) {
-        setPickerNote(
-          "This browser did not expose a usable absolute path. Paste the host path manually into the field.",
-          true
-        );
-        return;
-      }
-      target.value = resolvedPath;
-      hidePickerChoices();
-      setPickerNote("Path filled from the picker. Submitting source now.", false);
-      form.requestSubmit();
-    }
-
-    target.addEventListener("dblclick", function () {
-      showPickerChoices();
-    });
-
-    if (pickerModeRow) {
-      pickerModeRow.addEventListener("click", function (event) {
-        const button = event.target.closest("[data-picker-target]");
-        if (!button) return;
-        const mode = button.getAttribute("data-picker-target");
-        if (mode === "file" && filePicker) {
-          filePicker.click();
-        }
-        if (mode === "folder" && folderPicker) {
-          folderPicker.click();
-        }
-      });
-    }
-
-    if (filePicker) {
-      filePicker.addEventListener("change", function () {
-        assignFromFileInput(filePicker, false);
-      });
-    }
-    if (folderPicker) {
-      folderPicker.addEventListener("change", function () {
-        assignFromFileInput(folderPicker, true);
-      });
-    }
-  })();
-</script>
 {% endblock %}

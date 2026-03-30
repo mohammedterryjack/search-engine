@@ -1,18 +1,16 @@
 {% extends "base.html" %}
-{% block title %}Status - SearChi{% endblock %}
+{% block title %}Status - searChi{% endblock %}
 {% block body %}
 <main class="admin-shell">
   <header class="admin-header">
-    <a href="/" class="brand brand-small">SearChi</a>
+    <a href="/" class="brand brand-small">searChi</a>
     <h1>Status</h1>
+    <a href="/sources" class="secondary-link">Sources</a>
   </header>
 
-  <section class="admin-hero-card">
-    <div class="source-hint">System health, model state, and aggregate indexing counts live here.</div>
-    <img src="{{ url_for('static', path='/images/status.png') }}" alt="" class="stats-hero-image">
-  </section>
-
   <section class="admin-card">
+    <img src="{{ url_for('static', path='/images/status.png') }}" alt="" class="status-watermark-image">
+    <div class="source-hint">System health, model state, and aggregate indexing counts live here.</div>
     <div class="stats-grid">
       <div class="stat-tile">
         <div class="stat-label">Sources</div>
@@ -70,7 +68,7 @@
         <div class="stat-label">Failed jobs</div>
         <div class="stat-value">{{ job_counts.failed }}</div>
       </div>
-      <div class="stat-tile">
+      <div class="stat-tile {{ 'status-ok' if vector_enabled else 'status-neutral' }}">
         <div class="stat-label">Vector retrieval</div>
         <div class="stat-value">{{ "Enabled" if vector_enabled else "Disabled" }}</div>
         <div class="small-status">{{ vector_model_name }}</div>
@@ -81,7 +79,7 @@
           {% if not reranker_enabled %}
           Disabled
           {% else %}
-          {{ reranker_health.status|capitalize }}
+          {{ "Enabled" if reranker_health.status == "ok" else reranker_health.status|capitalize }}
           {% endif %}
         </div>
         {% if reranker_health.model_name %}

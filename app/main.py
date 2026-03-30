@@ -118,10 +118,17 @@ async def not_found(request: Request, _exc: StarletteHTTPException) -> HTMLRespo
     )
 
 
-def sources_redirect(*, error: str | None = None, source_path: str | None = None) -> RedirectResponse:
+def sources_redirect(
+    *,
+    error: str | None = None,
+    success: str | None = None,
+    source_path: str | None = None,
+) -> RedirectResponse:
     params: dict[str, str] = {}
     if error:
         params["error"] = error
+    if success:
+        params["success"] = success
     if source_path:
         params["source_path"] = source_path
     url = "/sources"
@@ -190,18 +197,21 @@ async def search(
         value for value in (unit_type or sorted(allowed_unit_types)) if value in allowed_unit_types
     }
     search_error = None
+    search_warning = None
     results = []
     effective_vector_min_score = (
         vector_min_score if vector_min_score is not None else settings.vector_min_score_default
     )
     if q:
         try:
-            results = search_all_sources(
+            response = search_all_sources(
                 q,
                 selected if selected else None,
                 unit_types=selected_unit_types if selected_unit_types else allowed_unit_types,
                 vector_min_score=effective_vector_min_score,
             )
+            results = response.results
+            search_warning = response.warning
         except SearchPipelineError as exc:
             search_error = str(exc)
     store = GlobalStore()
@@ -217,6 +227,7 @@ async def search(
             "all_unit_types": ["section", "figure", "table"],
             "vector_min_score": effective_vector_min_score,
             "search_error": search_error,
+            "search_warning": search_warning,
         },
     )
 
@@ -225,6 +236,7 @@ async def search(
 async def sources_view(
     request: Request,
     error: str | None = None,
+    success: str | None = None,
     source_path: str = "",
 ) -> HTMLResponse:
     store = GlobalStore()
@@ -236,14 +248,19 @@ async def sources_view(
         source_store = SourceStore(Path(str(source["db_path"])))
         db_path = Path(str(source["db_path"]))
         vector_report = faiss_reconciliation_report(db_path, source_store.all_content_unit_texts())
+        job_counts = store.job_status_counts(int(source["id"]))
+        vector_status = str(vector_report["status"])
+        if vector_status == "mismatch" and (job_counts["pending"] or job_counts["running"]):
+            vector_status = "syncing"
         rows.append(
             {
                 "source": source,
                 "documents": source_store.list_documents(),
                 "jobs": store.list_jobs(int(source["id"]))[:10],
-                "job_counts": store.job_status_counts(int(source["id"])),
+                "job_counts": job_counts,
                 "stats": source_store.stats(),
                 "vector_report": vector_report,
+                "vector_status": vector_status,
             }
         )
     return templates.TemplateResponse(
@@ -256,6 +273,7 @@ async def sources_view(
             "indexing_active": bool(global_job_counts["running"] or global_job_counts["pending"]),
             "reranker_health": reranker_health(),
             "error": error,
+            "success": success,
             "source_path": source_path,
             "allowed_source_root": settings.allowed_source_root,
             "format_bytes": format_bytes,
@@ -280,11 +298,16 @@ async def status_view(request: Request) -> HTMLResponse:
         total_postings += int(stats["term_posting_count"])
     heartbeats = store.service_heartbeats()
     worker_heartbeat = heartbeats.get("worker")
+    job_counts = store.job_status_counts()
+    worker_stale_after_seconds = max(
+        settings.poll_seconds * 3 + 3,
+        900 if int(job_counts["running"]) > 0 else 0,
+    )
     return templates.TemplateResponse(
         request,
         "status.html",
         {
-            "job_counts": store.job_status_counts(),
+            "job_counts": job_counts,
             "source_count": len(source_rows),
             "document_count": total_documents,
             "content_unit_count": total_content_units,
@@ -298,7 +321,7 @@ async def status_view(request: Request) -> HTMLResponse:
             "web_status": "ok",
             "worker_status": heartbeat_status(
                 str(worker_heartbeat["last_seen"]) if worker_heartbeat else None,
-                stale_after_seconds=settings.poll_seconds * 3 + 3,
+                stale_after_seconds=worker_stale_after_seconds,
             ),
             "worker_detail": str(worker_heartbeat["detail"]) if worker_heartbeat else "",
         },
@@ -321,11 +344,18 @@ async def add_source(request: Request) -> RedirectResponse:
     source_store = SourceStore(Path(str(source_root["db_path"])))
     source_store._init_db()
 
-    for document_path in list_supported_documents(path):
+    supported_documents = list_supported_documents(path)
+    queued_count = 0
+    for document_path in supported_documents:
         if not source_store.has_document(document_path):
             store.enqueue_document(int(source_root["id"]), document_path)
+            queued_count += 1
 
-    return sources_redirect(source_path=display_source_path)
+    success_message = (
+        f"Tracked source {display_source_path}. "
+        f"Found {len(supported_documents)} supported document(s) and queued {queued_count} new ingestion job(s)."
+    )
+    return sources_redirect(success=success_message, source_path=display_source_path)
 
 
 @app.post("/sources/{source_root_id}/clear")

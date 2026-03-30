@@ -16,3 +16,9 @@ class SearchResult:
     section_name: str
     display_text: str
     score: float
+
+
+@dataclass(slots=True)
+class SearchResponse:
+    results: list[SearchResult]
+    warning: str | None = None

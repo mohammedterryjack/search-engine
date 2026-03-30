@@ -62,17 +62,22 @@ def main() -> None:
     ensure_runtime_dirs()
     GlobalStore()
 
-    results = search_all_sources(
+    response = search_all_sources(
         args.query,
         set(args.source_id) if args.source_id else None,
         unit_types=set(args.unit_type) if args.unit_type else None,
         vector_min_score=args.semantic_threshold,
     )
-    trimmed = [asdict(result) for result in results[: max(args.limit, 0)]]
+    trimmed = [asdict(result) for result in response.results[: max(args.limit, 0)]]
 
     if args.json_mode:
-        print(json.dumps(trimmed, indent=2))
+        payload: dict[str, object] = {"results": trimmed}
+        if response.warning:
+            payload["warning"] = response.warning
+        print(json.dumps(payload, indent=2))
         return
+    if response.warning:
+        print(f"Warning: {response.warning}\n")
     print(render_text_results(trimmed))
 
 

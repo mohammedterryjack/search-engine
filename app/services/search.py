@@ -10,7 +10,7 @@ from pathlib import Path
 from app.config import get_settings
 from app.db.global_store import GlobalStore
 from app.db.source_store import SourceStore
-from app.models import SearchResult
+from app.models import SearchResponse, SearchResult
 from app.services.tokenize import normalized_terms
 from app.services.vector_store import query_faiss_index
 
@@ -48,10 +48,10 @@ def search_all_sources(
     *,
     unit_types: set[str] | None = None,
     vector_min_score: float | None = None,
-) -> list[SearchResult]:
+) -> SearchResponse:
     terms = normalized_terms(query)
     if not terms:
-        return []
+        return SearchResponse(results=[])
 
     global_store = GlobalStore()
     source_roots = global_store.list_source_roots()
@@ -59,8 +59,9 @@ def search_all_sources(
         source_roots = [row for row in source_roots if int(row["id"]) in source_root_ids]
 
     results: list[SearchResult] = []
+    warnings: list[str] = []
     for source_root in source_roots:
-        source_results = search_source_db(
+        source_results, source_warning = search_source_db(
             source_root_id=int(source_root["id"]),
             source_path=str(source_root["source_path"]),
             db_path=Path(str(source_root["db_path"])),
@@ -70,12 +71,14 @@ def search_all_sources(
             vector_min_score=vector_min_score,
         )
         results.extend(source_results)
+        if source_warning:
+            warnings.append(source_warning)
 
     if not results:
-        return []
+        return SearchResponse(results=[], warning=" ".join(warnings) if warnings else None)
 
     reranked = rerank_results(query, results[:100])
-    return reranked
+    return SearchResponse(results=reranked, warning=" ".join(warnings) if warnings else None)
 
 
 def search_source_db(
@@ -87,11 +90,10 @@ def search_source_db(
     terms: list[str],
     unit_types: set[str] | None = None,
     vector_min_score: float | None = None,
-) -> list[SearchResult]:
+) -> tuple[list[SearchResult], str | None]:
     if not db_path.exists():
-        return []
+        return [], None
 
-    store = SourceStore(db_path)
     lexical_results = lexical_search_source_db(
         source_root_id=source_root_id,
         source_path=source_path,
@@ -100,9 +102,10 @@ def search_source_db(
         unit_types=unit_types,
     )
     semantic_results: list[SearchResult] = []
+    warning: str | None = None
     settings = get_settings()
     if settings.enable_vector_retrieval:
-        semantic_results = semantic_search_source_db(
+        semantic_results, warning = semantic_search_source_db(
             source_root_id=source_root_id,
             source_path=source_path,
             db_path=db_path,
@@ -110,7 +113,7 @@ def search_source_db(
             unit_types=unit_types,
             vector_min_score=vector_min_score,
         )
-    return fuse_results(lexical_results, semantic_results, limit=100)
+    return fuse_results(lexical_results, semantic_results, limit=100), warning
 
 
 def lexical_search_source_db(
@@ -213,22 +216,22 @@ def semantic_search_source_db(
     query: str,
     unit_types: set[str] | None = None,
     vector_min_score: float | None = None,
-) -> list[SearchResult]:
+) -> tuple[list[SearchResult], str | None]:
     store = SourceStore(db_path)
     vector_hits = query_faiss_index(db_path, query, limit=300)
     if not vector_hits:
-        return []
+        return [], None
     effective_min_score = vector_min_score if vector_min_score is not None else float("-inf")
     content_unit_ids = [content_unit_id for content_unit_id, _score in vector_hits]
     rows = store.content_units_by_ids(content_unit_ids)
     row_by_id = {int(row["content_unit_id"]): row for row in rows}
     results: list[SearchResult] = []
-    for rank, (content_unit_id, score) in enumerate(vector_hits, start=1):
+    stale_ids: list[int] = []
+    for content_unit_id, score in vector_hits:
         row = row_by_id.get(content_unit_id)
         if row is None:
-            raise SearchPipelineError(
-                f"Vector index returned content_unit_id={content_unit_id}, but SQLite has no matching row."
-            )
+            stale_ids.append(content_unit_id)
+            continue
         if unit_types and str(row["unit_type"]) not in unit_types:
             continue
         if score < effective_min_score:
@@ -248,7 +251,13 @@ def semantic_search_source_db(
                 score=float(score),
             )
         )
-    return results[:100]
+    warning = None
+    if stale_ids:
+        from app.services.vector_store import update_faiss_index
+
+        update_faiss_index(db_path, remove_ids=stale_ids)
+        warning = f"Removed {len(stale_ids)} stale vector entr{'y' if len(stale_ids) == 1 else 'ies'} from the semantic index."
+    return results[:100], warning
 
 
 def fuse_results(

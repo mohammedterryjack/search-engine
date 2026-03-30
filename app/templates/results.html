@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% block title %}{{ query }} - SearChi{% endblock %}
+{% block title %}{{ query }} - searChi{% endblock %}
 {% block body %}
 <header class="topbar">
-  <a href="/" class="brand brand-small">SearChi</a>
+  <a href="/" class="brand brand-small">searChi</a>
   <form action="/search" method="get" class="search-form results-search-form">
     <div class="search-bar-row">
       <div class="search-input-wrap">
@@ -17,7 +17,12 @@
               <div class="advanced-option-row">
                 {% for source in sources %}
                 <label class="advanced-option">
-                  <input type="checkbox" name="source" value="{{ source.id }}" {% if source.id in selected_sources %}checked{% endif %}>
+                  <input
+                    type="checkbox"
+                    name="source"
+                    value="{{ source.id }}"
+                    {% if not selected_sources or source.id in selected_sources %}checked{% endif %}
+                  >
                   <span>{{ source.source_path }}</span>
                 </label>
                 {% endfor %}
@@ -48,15 +53,15 @@
                 data-threshold-output="vector_min_score_results_value"
               >
               <div class="slider-legend">
-                <span>Loose</span>
                 <strong id="vector_min_score_results_value">{{ "%.2f"|format(vector_min_score) }}</strong>
                 <span>Strict</span>
               </div>
+              <div class="advanced-help">0.00 keeps all semantic hits. Higher values filter out weaker semantic matches.</div>
             </div>
           </div>
         </div>
       </details>
-      <button type="submit" class="primary-button">Search</button>
+      <button type="submit" class="primary-button icon-button" aria-label="Search" title="Search">&#128269;</button>
     </div>
   </form>
 </header>
@@ -64,6 +69,9 @@
   <section class="results-column">
     {% if search_error %}
     <div class="form-error">{{ search_error }}</div>
+    {% endif %}
+    {% if search_warning %}
+    <div class="form-success">{{ search_warning }}</div>
     {% endif %}
     {% if query %}
     <div class="results-meta">{{ results|length }} results</div>

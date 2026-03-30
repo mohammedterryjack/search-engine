@@ -79,7 +79,7 @@ def test_semantic_search_respects_threshold(monkeypatch, tmp_path: Path) -> None
         lambda _db_path, _query, limit=300: [(1, 0.19)],
     )
 
-    filtered = semantic_search_source_db(
+    filtered, filtered_warning = semantic_search_source_db(
         source_root_id=1,
         source_path="/src",
         db_path=store.db_path,
@@ -87,14 +87,16 @@ def test_semantic_search_respects_threshold(monkeypatch, tmp_path: Path) -> None
         vector_min_score=0.2,
     )
     assert filtered == []
+    assert filtered_warning is None
 
-    passed = semantic_search_source_db(
+    passed, passed_warning = semantic_search_source_db(
         source_root_id=1,
         source_path="/src",
         db_path=store.db_path,
         query="chaos system",
         vector_min_score=0.1,
     )
+    assert passed_warning is None
     assert len(passed) == 1
     assert passed[0].content_unit_id == 1
 
@@ -123,3 +125,56 @@ def test_rerank_results_uses_reranker_response(monkeypatch) -> None:
     ]
     reranked = rerank_results("query", results)
     assert [item.content_unit_id for item in reranked] == [2, 1]
+
+
+def test_semantic_search_repairs_stale_vector_ids(monkeypatch, tmp_path: Path) -> None:
+    doc_path = tmp_path / "paper.pdf"
+    doc_path.write_text("placeholder")
+    store = SourceStore(tmp_path / "source.sqlite3")
+    document_id = store.upsert_document(
+        document_path=doc_path,
+        status="indexed",
+        page_count=1,
+        created_at=utc_now(),
+        updated_at=utc_now(),
+    )
+    store.replace_content_units(
+        document_id,
+        [
+            {
+                "unit_type": "section",
+                "page_number": 1,
+                "section_name": "Chaos",
+                "anchor_key": "section-1",
+                "text_content": "chaos attractor",
+                "caption": "",
+                "display_text": "chaos attractor",
+                "token_count": 2,
+                "created_at": utc_now(),
+                "terms": term_frequencies("chaos attractor"),
+                "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+            }
+        ],
+    )
+
+    removed: list[int] = []
+    monkeypatch.setattr(
+        "app.services.search.query_faiss_index",
+        lambda _db_path, _query, limit=300: [(999, 0.8), (1, 0.4)],
+    )
+    monkeypatch.setattr(
+        "app.services.vector_store.update_faiss_index",
+        lambda _db_path, remove_ids=None, add_rows=None: removed.extend(remove_ids or []),
+    )
+
+    results, warning = semantic_search_source_db(
+        source_root_id=1,
+        source_path="/src",
+        db_path=store.db_path,
+        query="chaos system",
+        vector_min_score=0.1,
+    )
+
+    assert [item.content_unit_id for item in results] == [1]
+    assert warning == "Removed 1 stale vector entry from the semantic index."
+    assert removed == [999]
