@@ -353,7 +353,7 @@ async def document_results_view(request: Request, source_root_id: int, document_
 
     from app.models import SearchResult
 
-        results = [
+    results = [
             SearchResult(
                 source_root_id=source_root_id,
                 source_path=str(source_root["source_path"]),
