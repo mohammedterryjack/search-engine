@@ -1,0 +1,4 @@
+- is the bm25 rerank stage useful given that we use a reranker after?
+- does docling allow bounding boxes to be drawn 
+- cli query mode for llm
+- is the db stored in a place on the host computer or in the repo (will it be accessible if this becomes a library/ package basically)

@@ -12,12 +12,12 @@ SirChi is a local document search engine with:
 
 - `web`: FastAPI UI and API
 - `worker`: background ingestion loop
-- `reranker`: lightweight scoring service
+- `reranker`: cross-encoder reranking service
 
 ## Local development
 
 ```bash
-docker compose up --build
+make rebuild
 ```
 
 The app stores runtime data in `data/`.

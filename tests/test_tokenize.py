@@ -5,6 +5,10 @@ def test_normalized_terms_drops_stop_words() -> None:
     assert normalized_terms("The quick brown fox") == ["quick", "brown", "fox"]
 
 
+def test_normalized_terms_lemmatizes() -> None:
+    assert normalized_terms("running runs ran") == ["run", "run", "run"]
+
+
 def test_term_frequencies_counts_terms() -> None:
     freqs = term_frequencies("alpha beta alpha")
     assert freqs["alpha"] == 2

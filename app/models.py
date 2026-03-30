@@ -4,16 +4,6 @@ from dataclasses import dataclass
 
 
 @dataclass(slots=True)
-class SourceRoot:
-    id: int
-    source_path: str
-    source_type: str
-    db_path: str
-    status: str
-    created_at: str
-
-
-@dataclass(slots=True)
 class SearchResult:
     source_root_id: int
     source_path: str
