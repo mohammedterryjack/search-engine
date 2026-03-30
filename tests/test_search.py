@@ -1,0 +1,125 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from app.db.global_store import utc_now
+from app.db.source_store import SourceStore
+from app.models import SearchResult
+from app.services.search import bm25_score, fuse_results, rerank_results, semantic_search_source_db
+from app.services.tokenize import term_frequencies
+
+
+def test_bm25_score_prefers_higher_term_frequency() -> None:
+    high = bm25_score(
+        query_terms=["chaos"],
+        doc_term_freqs={"chaos": 3},
+        doc_length=10,
+        avg_doc_length=10.0,
+        term_doc_counts={"chaos": 2},
+        total_docs=20,
+    )
+    low = bm25_score(
+        query_terms=["chaos"],
+        doc_term_freqs={"chaos": 1},
+        doc_length=10,
+        avg_doc_length=10.0,
+        term_doc_counts={"chaos": 2},
+        total_docs=20,
+    )
+    assert high > low
+
+
+def test_fuse_results_rewards_overlap() -> None:
+    lexical = [
+        SearchResult(1, "/src", 1, 10, "/doc1", "doc1", "section", 1, "A", "alpha", 1.0),
+        SearchResult(1, "/src", 1, 20, "/doc2", "doc2", "section", 1, "B", "beta", 0.9),
+    ]
+    semantic = [
+        SearchResult(1, "/src", 1, 10, "/doc1", "doc1", "section", 1, "A", "alpha", 0.8),
+        SearchResult(1, "/src", 1, 30, "/doc3", "doc3", "section", 1, "C", "gamma", 0.7),
+    ]
+
+    fused = fuse_results(lexical, semantic, limit=10)
+    assert fused[0].content_unit_id == 10
+
+
+def test_semantic_search_respects_threshold(monkeypatch, tmp_path: Path) -> None:
+    doc_path = tmp_path / "paper.pdf"
+    doc_path.write_text("placeholder")
+    store = SourceStore(tmp_path / "source.sqlite3")
+    document_id = store.upsert_document(
+        document_path=doc_path,
+        status="indexed",
+        page_count=1,
+        created_at=utc_now(),
+        updated_at=utc_now(),
+    )
+    store.replace_content_units(
+        document_id,
+        [
+            {
+                "unit_type": "section",
+                "page_number": 1,
+                "section_name": "Chaos",
+                "anchor_key": "section-1",
+                "text_content": "chaos attractor",
+                "caption": "",
+                "display_text": "chaos attractor",
+                "token_count": 2,
+                "created_at": utc_now(),
+                "terms": term_frequencies("chaos attractor"),
+                "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+            }
+        ],
+    )
+
+    monkeypatch.setattr(
+        "app.services.search.query_faiss_index",
+        lambda _db_path, _query, limit=300: [(1, 0.19)],
+    )
+
+    filtered = semantic_search_source_db(
+        source_root_id=1,
+        source_path="/src",
+        db_path=store.db_path,
+        query="chaos system",
+        vector_min_score=0.2,
+    )
+    assert filtered == []
+
+    passed = semantic_search_source_db(
+        source_root_id=1,
+        source_path="/src",
+        db_path=store.db_path,
+        query="chaos system",
+        vector_min_score=0.1,
+    )
+    assert len(passed) == 1
+    assert passed[0].content_unit_id == 1
+
+
+def test_rerank_results_uses_reranker_response(monkeypatch) -> None:
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self) -> bytes:
+            return json.dumps(
+                [
+                    {"content_unit_id": 2, "score": 0.9},
+                    {"content_unit_id": 1, "score": 0.1},
+                ]
+            ).encode("utf-8")
+
+    monkeypatch.setattr("urllib.request.urlopen", lambda *args, **kwargs: FakeResponse())
+
+    results = [
+        SearchResult(1, "/src", 1, 1, "/doc1", "doc1", "section", 1, "A", "alpha", 0.3),
+        SearchResult(1, "/src", 1, 2, "/doc2", "doc2", "section", 1, "B", "beta", 0.2),
+    ]
+    reranked = rerank_results("query", results)
+    assert [item.content_unit_id for item in reranked] == [2, 1]

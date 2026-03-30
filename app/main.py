@@ -1,31 +1,86 @@
 from __future__ import annotations
 
 import mimetypes
+import os
+import shutil
+import urllib.error
+import urllib.request
+from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urlencode
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from app.config import get_settings
+from app.config import get_settings, legacy_repo_data_dir
 from app.db.global_store import GlobalStore
 from app.db.source_store import SourceStore
 from app.services.ingest import list_supported_documents
 from app.services.search import SearchPipelineError, search_all_sources
+from app.services.vector_store import (
+    faiss_path_for_db,
+    faiss_reconciliation_report,
+    rebuild_faiss_index,
+    update_faiss_index,
+)
 from app.ui import highlight_terms, truncate_text
 
 
 settings = get_settings()
-app = FastAPI(title="SirChi")
+app = FastAPI(title="SearChi")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 templates.env.filters["highlight_terms"] = highlight_terms
 templates.env.filters["truncate_text"] = truncate_text
 
 
+def format_bytes(size: int) -> str:
+    value = float(size)
+    units = ["B", "KB", "MB", "GB"]
+    for unit in units:
+        if value < 1024 or unit == units[-1]:
+            if unit == "B":
+                return f"{int(value)} {unit}"
+            return f"{value:.1f} {unit}"
+        value /= 1024
+    return f"{int(size)} B"
+
+
+def reranker_health() -> dict[str, object]:
+    if not settings.enable_reranker:
+        return {"status": "disabled"}
+    try:
+        request = urllib.request.Request(
+            f"{settings.reranker_url}/internal/health",
+            headers={"X-Searchi-Status-Token": settings.status_token},
+        )
+        with urllib.request.urlopen(request, timeout=2) as response:
+            payload = response.read().decode("utf-8")
+        import json
+
+        data = json.loads(payload)
+        return {
+            "status": str(data.get("status", "ok")),
+            "model_name": str(data.get("model_name", "")),
+            "device": str(data.get("device", "")),
+        }
+    except (urllib.error.URLError, TimeoutError, ValueError) as exc:
+        return {"status": "error", "error": str(exc)}
+
+
 def ensure_runtime_dirs() -> None:
+    legacy_data = legacy_repo_data_dir()
+    if (
+        "SEARCHY_DATA_DIR" not in os.environ
+        and legacy_data.exists()
+        and not settings.data_dir.exists()
+        and legacy_data != settings.data_dir
+    ):
+        settings.data_dir.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(legacy_data), str(settings.data_dir))
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     settings.app_db_path.parent.mkdir(parents=True, exist_ok=True)
     settings.source_db_dir.mkdir(parents=True, exist_ok=True)
@@ -34,7 +89,33 @@ def ensure_runtime_dirs() -> None:
 @app.on_event("startup")
 def startup() -> None:
     ensure_runtime_dirs()
-    GlobalStore()
+    GlobalStore().touch_service_heartbeat("web", "startup")
+
+
+def parse_iso_timestamp(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def heartbeat_status(last_seen: str | None, *, stale_after_seconds: float) -> str:
+    timestamp = parse_iso_timestamp(last_seen)
+    if timestamp is None:
+        return "unknown"
+    age = (datetime.now(UTC) - timestamp).total_seconds()
+    return "ok" if age <= stale_after_seconds else "stale"
+
+
+@app.exception_handler(404)
+async def not_found(request: Request, _exc: StarletteHTTPException) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request,
+        "error.html",
+        status_code=404,
+    )
 
 
 def sources_redirect(*, error: str | None = None, source_path: str | None = None) -> RedirectResponse:
@@ -89,18 +170,38 @@ async def home(request: Request) -> HTMLResponse:
         {
             "sources": store.list_source_roots(),
             "jobs": store.list_jobs()[:10],
+            "default_vector_min_score": settings.vector_min_score_default,
+            "all_unit_types": ["section", "figure", "table"],
         },
     )
 
 
 @app.get("/search", response_class=HTMLResponse)
-async def search(request: Request, q: str = "", source: list[int] | None = None) -> HTMLResponse:
+async def search(
+    request: Request,
+    q: str = "",
+    source: list[int] | None = None,
+    unit_type: list[str] | None = None,
+    vector_min_score: float | None = None,
+) -> HTMLResponse:
     selected = set(source or [])
+    allowed_unit_types = {"section", "figure", "table"}
+    selected_unit_types = {
+        value for value in (unit_type or sorted(allowed_unit_types)) if value in allowed_unit_types
+    }
     search_error = None
     results = []
+    effective_vector_min_score = (
+        vector_min_score if vector_min_score is not None else settings.vector_min_score_default
+    )
     if q:
         try:
-            results = search_all_sources(q, selected if selected else None)
+            results = search_all_sources(
+                q,
+                selected if selected else None,
+                unit_types=selected_unit_types if selected_unit_types else allowed_unit_types,
+                vector_min_score=effective_vector_min_score,
+            )
         except SearchPipelineError as exc:
             search_error = str(exc)
     store = GlobalStore()
@@ -112,6 +213,9 @@ async def search(request: Request, q: str = "", source: list[int] | None = None)
             "results": results,
             "sources": store.list_source_roots(),
             "selected_sources": selected,
+            "selected_unit_types": selected_unit_types,
+            "all_unit_types": ["section", "figure", "table"],
+            "vector_min_score": effective_vector_min_score,
             "search_error": search_error,
         },
     )
@@ -124,14 +228,22 @@ async def sources_view(
     source_path: str = "",
 ) -> HTMLResponse:
     store = GlobalStore()
+    store.touch_service_heartbeat("web", "sources")
     rows = []
+    global_job_counts = store.job_status_counts()
+    running_jobs = [job for job in store.list_jobs() if str(job["status"]) == "running"][:10]
     for source in store.list_source_roots():
         source_store = SourceStore(Path(str(source["db_path"])))
+        db_path = Path(str(source["db_path"]))
+        vector_report = faiss_reconciliation_report(db_path, source_store.all_content_unit_texts())
         rows.append(
             {
                 "source": source,
                 "documents": source_store.list_documents(),
                 "jobs": store.list_jobs(int(source["id"]))[:10],
+                "job_counts": store.job_status_counts(int(source["id"])),
+                "stats": source_store.stats(),
+                "vector_report": vector_report,
             }
         )
     return templates.TemplateResponse(
@@ -139,9 +251,56 @@ async def sources_view(
         "sources.html",
         {
             "rows": rows,
+            "global_job_counts": global_job_counts,
+            "running_jobs": running_jobs,
+            "indexing_active": bool(global_job_counts["running"] or global_job_counts["pending"]),
+            "reranker_health": reranker_health(),
             "error": error,
             "source_path": source_path,
             "allowed_source_root": settings.allowed_source_root,
+            "format_bytes": format_bytes,
+        },
+    )
+
+
+@app.get("/status", response_class=HTMLResponse)
+async def status_view(request: Request) -> HTMLResponse:
+    store = GlobalStore()
+    store.touch_service_heartbeat("web", "status")
+    source_rows = store.list_source_roots()
+    total_documents = 0
+    total_content_units = 0
+    total_embeddings = 0
+    total_postings = 0
+    for row in source_rows:
+        stats = SourceStore(Path(str(row["db_path"]))).stats()
+        total_documents += int(stats["document_count"])
+        total_content_units += int(stats["content_unit_count"])
+        total_embeddings += int(stats["embedding_count"])
+        total_postings += int(stats["term_posting_count"])
+    heartbeats = store.service_heartbeats()
+    worker_heartbeat = heartbeats.get("worker")
+    return templates.TemplateResponse(
+        request,
+        "status.html",
+        {
+            "job_counts": store.job_status_counts(),
+            "source_count": len(source_rows),
+            "document_count": total_documents,
+            "content_unit_count": total_content_units,
+            "embedding_count": total_embeddings,
+            "term_posting_count": total_postings,
+            "reranker_health": reranker_health(),
+            "vector_model_name": settings.vector_model_name,
+            "vector_enabled": settings.enable_vector_retrieval,
+            "reranker_enabled": settings.enable_reranker,
+            "poll_seconds": settings.poll_seconds,
+            "web_status": "ok",
+            "worker_status": heartbeat_status(
+                str(worker_heartbeat["last_seen"]) if worker_heartbeat else None,
+                stale_after_seconds=settings.poll_seconds * 3 + 3,
+            ),
+            "worker_detail": str(worker_heartbeat["detail"]) if worker_heartbeat else "",
         },
     )
 
@@ -176,7 +335,38 @@ async def clear_source(source_root_id: int) -> RedirectResponse:
     if source_root is None:
         raise HTTPException(status_code=404, detail="Source not found")
     source_store = SourceStore(Path(str(source_root["db_path"])))
-    source_store.clear()
+    db_path = Path(str(source_root["db_path"]))
+    removed_ids = source_store.clear_with_content_ids()
+    if removed_ids:
+        update_faiss_index(db_path, remove_ids=removed_ids)
+    return RedirectResponse(url="/sources", status_code=303)
+
+
+@app.post("/sources/{source_root_id}/retry-failed")
+async def retry_failed_source_jobs(source_root_id: int) -> RedirectResponse:
+    store = GlobalStore()
+    if store.get_source_root(source_root_id) is None:
+        raise HTTPException(status_code=404, detail="Source not found")
+    store.retry_failed_jobs(source_root_id)
+    return RedirectResponse(url="/sources", status_code=303)
+
+
+@app.post("/jobs/{job_id}/retry")
+async def retry_job(job_id: int) -> RedirectResponse:
+    store = GlobalStore()
+    store.retry_job(job_id)
+    return RedirectResponse(url="/sources", status_code=303)
+
+
+@app.post("/sources/{source_root_id}/repair-index")
+async def repair_source_index(source_root_id: int) -> RedirectResponse:
+    store = GlobalStore()
+    source_root = store.get_source_root(source_root_id)
+    if source_root is None:
+        raise HTTPException(status_code=404, detail="Source not found")
+    db_path = Path(str(source_root["db_path"]))
+    source_store = SourceStore(db_path)
+    rebuild_faiss_index(db_path, source_store.all_content_unit_texts())
     return RedirectResponse(url="/sources", status_code=303)
 
 
@@ -188,6 +378,9 @@ async def delete_source(source_root_id: int) -> RedirectResponse:
         db_path = Path(str(source_root["db_path"]))
         if db_path.exists():
             db_path.unlink()
+        faiss_path = faiss_path_for_db(db_path)
+        if faiss_path.exists():
+            faiss_path.unlink()
     return RedirectResponse(url="/sources", status_code=303)
 
 
@@ -197,8 +390,11 @@ async def delete_document(source_root_id: int, document_id: int) -> RedirectResp
     source_root = store.get_source_root(source_root_id)
     if source_root is None:
         raise HTTPException(status_code=404, detail="Source not found")
-    source_store = SourceStore(Path(str(source_root["db_path"])))
-    source_store.delete_document(document_id)
+    db_path = Path(str(source_root["db_path"]))
+    source_store = SourceStore(db_path)
+    removed_ids = source_store.delete_document_with_content_ids(document_id)
+    if removed_ids:
+        update_faiss_index(db_path, remove_ids=removed_ids)
     return RedirectResponse(url="/sources", status_code=303)
 
 

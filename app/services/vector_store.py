@@ -52,6 +52,65 @@ def rebuild_faiss_index(db_path: Path, rows: list[tuple[int, str]]) -> None:
     faiss.write_index(index, str(index_path))
 
 
+def update_faiss_index(
+    db_path: Path,
+    *,
+    remove_ids: list[int] | None = None,
+    add_rows: list[tuple[int, str]] | None = None,
+) -> None:
+    remove_ids = remove_ids or []
+    add_rows = add_rows or []
+    index_path = faiss_path_for_db(db_path)
+
+    if not index_path.exists():
+        if add_rows:
+            rebuild_faiss_index(db_path, add_rows)
+        return
+
+    index = faiss.read_index(str(index_path))
+    if remove_ids:
+        ids = np.asarray(remove_ids, dtype=np.int64)
+        index.remove_ids(ids)
+
+    if add_rows:
+        content_unit_ids = np.asarray([row[0] for row in add_rows], dtype=np.int64)
+        texts = [row[1] for row in add_rows]
+        vectors = embed_texts(texts)
+        index.add_with_ids(vectors, content_unit_ids)
+
+    ntotal = getattr(index, "ntotal", 0)
+    if ntotal == 0:
+        index_path.unlink(missing_ok=True)
+        return
+    faiss.write_index(index, str(index_path))
+
+
+def faiss_index_ids(db_path: Path) -> set[int]:
+    index_path = faiss_path_for_db(db_path)
+    if not index_path.exists():
+        return set()
+    index = faiss.read_index(str(index_path))
+    id_map = getattr(index, "id_map", None)
+    if id_map is None:
+        return set()
+    ids = faiss.vector_to_array(id_map)
+    return {int(value) for value in ids.tolist()}
+
+
+def faiss_reconciliation_report(db_path: Path, expected_rows: list[tuple[int, str]]) -> dict[str, object]:
+    expected_ids = {int(content_unit_id) for content_unit_id, _text in expected_rows}
+    actual_ids = faiss_index_ids(db_path)
+    missing_in_faiss = sorted(expected_ids - actual_ids)
+    stale_in_faiss = sorted(actual_ids - expected_ids)
+    return {
+        "expected_count": len(expected_ids),
+        "actual_count": len(actual_ids),
+        "missing_in_faiss": missing_in_faiss,
+        "stale_in_faiss": stale_in_faiss,
+        "status": "ok" if not missing_in_faiss and not stale_in_faiss else "mismatch",
+    }
+
+
 def query_faiss_index(db_path: Path, query: str, limit: int = 100) -> list[tuple[int, float]]:
     index_path = faiss_path_for_db(db_path)
     if not index_path.exists():

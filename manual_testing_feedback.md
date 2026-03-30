@@ -1,0 +1,7 @@
+- style for advanced setting is much better but i think the black on pink theme can be instead gray on pink (e.g. ticks are gray and back of slider is gray instead of black)
+- there is a strange word "Loose" in the Advanced settings - we can remove it
+- in Status, the Reranker green looks good - we can also have Vector retrieval Green too as it is also Enabled/Ok
+- We should consolidate language here as we have OK on reranker and Enabled on Vector retrieval - lets just make both Enabled
+- in the file picker, when doouble clicking it shows Pick File and Pick Folder - but it should just go into the view when we click "Pick Folder/File" and brings up the file selecter popup. 
+- When i selected a pdf on the desktop, it said: This browser did not expose a usable absolute path. Paste the host path manually into the field.  What happened here?
+- When i selected Desktop as a folder, it asked if Im sure, after i said OK i dont see it as a source (i think theres a bug there) 

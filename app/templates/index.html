@@ -1,20 +1,73 @@
 {% extends "base.html" %}
-{% block title %}SirChi{% endblock %}
+{% block title %}SearChi{% endblock %}
 {% block body_class %}home-body{% endblock %}
 {% block body %}
 <main class="home-shell">
-  <img src="{{ url_for('static', path='/chi-cat.png') }}" alt="" class="home-cat-image">
+  <img src="{{ url_for('static', path='/images/home.png') }}" alt="" class="home-cat-image">
   <header class="home-header">
-    <div class="brand">SirChi</div>
+    <div class="brand">SearChi</div>
   </header>
   <section class="search-card">
     <form action="/search" method="get" class="search-form home-search-form">
-      <div class="search-input-wrap">
-        <input type="text" name="q" class="search-input" autocomplete="off" autofocus>
+      <div class="search-bar-row">
+        <div class="search-input-wrap">
+          <input type="text" name="q" class="search-input" autocomplete="off" autofocus>
+        </div>
+        <details class="advanced-toggle">
+          <summary class="advanced-icon-button" aria-label="Advanced settings" title="Advanced settings">&#9881;</summary>
+          <div class="advanced-flyout">
+            <div class="advanced-grid">
+              {% if sources %}
+              <div class="advanced-group">
+                <div class="advanced-label">Sources</div>
+                <div class="advanced-option-row">
+                  {% for source in sources %}
+                  <label class="advanced-option">
+                    <input type="checkbox" name="source" value="{{ source.id }}">
+                    <span>{{ source.source_path }}</span>
+                  </label>
+                  {% endfor %}
+                </div>
+              </div>
+              {% endif %}
+              <div class="advanced-group">
+                <div class="advanced-label">Search in</div>
+                <div class="advanced-option-row">
+                  {% for value in all_unit_types %}
+                  <label class="advanced-option">
+                    <input type="checkbox" name="unit_type" value="{{ value }}" checked>
+                    <span>{{ value|capitalize }}</span>
+                  </label>
+                  {% endfor %}
+                </div>
+              </div>
+              <div class="advanced-group advanced-group-wide">
+                <label class="advanced-label" for="vector_min_score_home">Semantic match strictness</label>
+                <input
+                  id="vector_min_score_home"
+                  name="vector_min_score"
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value="{{ default_vector_min_score }}"
+                  class="threshold-slider"
+                  data-threshold-output="vector_min_score_home_value"
+                >
+                <div class="slider-legend">
+                  <span>Loose</span>
+                  <strong id="vector_min_score_home_value">{{ "%.2f"|format(default_vector_min_score) }}</strong>
+                  <span>Strict</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </details>
+        <button type="submit" class="primary-button">Search</button>
       </div>
       <div class="action-row">
-        <button type="submit" class="primary-button">Search</button>
         <a href="/sources" class="secondary-link">Manage Sources</a>
+        <a href="/status" class="secondary-link">Status</a>
       </div>
     </form>
   </section>
@@ -23,4 +76,17 @@
     <span>{{ jobs|length }} recent job{{ '' if jobs|length == 1 else 's' }}</span>
   </section>
 </main>
+<script>
+  (function () {
+    document.querySelectorAll("[data-threshold-output]").forEach(function (input) {
+      const output = document.getElementById(input.getAttribute("data-threshold-output"));
+      if (!output) return;
+      function sync() {
+        output.textContent = Number(input.value).toFixed(2);
+      }
+      input.addEventListener("input", sync);
+      sync();
+    });
+  })();
+</script>
 {% endblock %}

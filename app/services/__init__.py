@@ -1,1 +1,1 @@
-"""Service layer for SirChi."""
+"""Service layer for SearChi."""

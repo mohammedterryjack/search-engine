@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Page Not Found - SearChi{% endblock %}
+{% block body_class %}error-body{% endblock %}
+{% block body %}
+<main class="error-shell">
+  <img src="{{ url_for('static', path='/images/error.png') }}" alt="" class="error-image">
+  <section class="error-card">
+    <div class="brand brand-small">SearChi</div>
+    <h1>That page does not exist.</h1>
+    <p class="error-copy">
+      The route you tried is not part of this local app.
+    </p>
+    <div class="action-row">
+      <a href="/" class="primary-button">Back to Search</a>
+      <a href="/sources" class="secondary-button">Sources</a>
+    </div>
+  </section>
+</main>
+{% endblock %}

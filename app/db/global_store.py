@@ -61,6 +61,12 @@ class GlobalStore:
                     FOREIGN KEY(source_root_id) REFERENCES source_roots(id),
                     UNIQUE(source_root_id, document_path)
                 );
+
+                CREATE TABLE IF NOT EXISTS service_heartbeats (
+                    service_name TEXT PRIMARY KEY,
+                    last_seen TEXT NOT NULL,
+                    detail TEXT
+                );
                 """
             )
 
@@ -129,6 +135,23 @@ class GlobalStore:
         with self.connect() as conn:
             return conn.execute(query, params).fetchall()
 
+    def job_status_counts(self, source_root_id: int | None = None) -> dict[str, int]:
+        query = """
+            SELECT status, COUNT(*) AS count
+            FROM ingestion_jobs
+        """
+        params: tuple[object, ...] = ()
+        if source_root_id is not None:
+            query += " WHERE source_root_id = ?"
+            params = (source_root_id,)
+        query += " GROUP BY status"
+        counts = {"pending": 0, "running": 0, "done": 0, "failed": 0}
+        with self.connect() as conn:
+            rows = conn.execute(query, params).fetchall()
+        for row in rows:
+            counts[str(row["status"])] = int(row["count"])
+        return counts
+
     def take_next_job(self) -> sqlite3.Row | None:
         with self.connect() as conn:
             row = conn.execute(
@@ -175,3 +198,51 @@ class GlobalStore:
                 """,
                 (utc_now(), error_message[:1000], job_id),
             )
+
+    def retry_job(self, job_id: int) -> None:
+        with self.connect() as conn:
+            conn.execute(
+                """
+                UPDATE ingestion_jobs
+                SET status = 'pending',
+                    error_message = NULL,
+                    started_at = NULL,
+                    finished_at = NULL,
+                    created_at = ?
+                WHERE id = ?
+                """,
+                (utc_now(), job_id),
+            )
+
+    def retry_failed_jobs(self, source_root_id: int) -> None:
+        with self.connect() as conn:
+            conn.execute(
+                """
+                UPDATE ingestion_jobs
+                SET status = 'pending',
+                    error_message = NULL,
+                    started_at = NULL,
+                    finished_at = NULL,
+                    created_at = ?
+                WHERE source_root_id = ? AND status = 'failed'
+                """,
+                (utc_now(), source_root_id),
+            )
+
+    def touch_service_heartbeat(self, service_name: str, detail: str = "") -> None:
+        with self.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO service_heartbeats(service_name, last_seen, detail)
+                VALUES(?, ?, ?)
+                ON CONFLICT(service_name) DO UPDATE SET
+                    last_seen = excluded.last_seen,
+                    detail = excluded.detail
+                """,
+                (service_name, utc_now(), detail[:500]),
+            )
+
+    def service_heartbeats(self) -> dict[str, sqlite3.Row]:
+        with self.connect() as conn:
+            rows = conn.execute("SELECT * FROM service_heartbeats").fetchall()
+        return {str(row["service_name"]): row for row in rows}

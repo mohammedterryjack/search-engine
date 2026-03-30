@@ -5,16 +5,17 @@ from functools import lru_cache
 
 import torch
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Header, HTTPException, Request
 from sentence_transformers import CrossEncoder
 
 
-app = FastAPI(title="SirChi Reranker")
+app = FastAPI(title="SearChi Reranker")
 
 MODEL_NAME = os.getenv("SEARCHY_RERANKER_MODEL", "cross-encoder/ms-marco-MiniLM-L4-v2")
 DEVICE = os.getenv("SEARCHY_RERANKER_DEVICE")
 MAX_LENGTH = int(os.getenv("SEARCHY_RERANKER_MAX_LENGTH", "512"))
 BATCH_SIZE = int(os.getenv("SEARCHY_RERANKER_BATCH_SIZE", "16"))
+STATUS_TOKEN = os.getenv("SEARCHY_STATUS_TOKEN", "searchi-local-status")
 
 
 @lru_cache(maxsize=1)
@@ -33,8 +34,10 @@ def warm_model() -> None:
     get_model()
 
 
-@app.get("/health")
-async def health() -> dict[str, object]:
+@app.get("/internal/health")
+async def health(x_searchi_status_token: str | None = Header(default=None)) -> dict[str, object]:
+    if x_searchi_status_token != STATUS_TOKEN:
+        raise HTTPException(status_code=404, detail="Not found")
     model = get_model()
     return {
         "status": "ok",

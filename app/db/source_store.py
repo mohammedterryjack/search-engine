@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
+from app.services.vector_store import faiss_path_for_db
 
 def file_checksum(path: Path) -> str:
     digest = hashlib.sha1()
@@ -204,6 +205,14 @@ class SourceStore:
                     ),
                 )
 
+    def document_content_unit_ids(self, document_id: int) -> list[int]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                "SELECT id FROM content_units WHERE document_id = ? ORDER BY id ASC",
+                (document_id,),
+            ).fetchall()
+        return [int(row["id"]) for row in rows]
+
     def delete_document(self, document_id: int) -> None:
         with self.connect() as conn:
             content_ids = [
@@ -225,6 +234,18 @@ class SourceStore:
                 )
             conn.execute("DELETE FROM content_units WHERE document_id = ?", (document_id,))
             conn.execute("DELETE FROM documents WHERE id = ?", (document_id,))
+
+    def delete_document_with_content_ids(self, document_id: int) -> list[int]:
+        content_ids = self.document_content_unit_ids(document_id)
+        self.delete_document(document_id)
+        return content_ids
+
+    def clear_with_content_ids(self) -> list[int]:
+        with self.connect() as conn:
+            rows = conn.execute("SELECT id FROM content_units ORDER BY id ASC").fetchall()
+        content_ids = [int(row["id"]) for row in rows]
+        self.clear()
+        return content_ids
 
     def clear(self) -> None:
         with self.connect() as conn:
@@ -279,3 +300,45 @@ class SourceStore:
                 content_unit_ids,
             ).fetchall()
         return rows
+
+    def document_content_unit_texts(self, document_id: int) -> list[tuple[int, str]]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT id, display_text
+                FROM content_units
+                WHERE document_id = ?
+                ORDER BY id ASC
+                """,
+                (document_id,),
+            ).fetchall()
+        return [(int(row["id"]), str(row["display_text"])) for row in rows]
+
+    def stats(self) -> dict[str, object]:
+        with self.connect() as conn:
+            document_count = int(conn.execute("SELECT COUNT(*) FROM documents").fetchone()[0])
+            content_unit_count = int(conn.execute("SELECT COUNT(*) FROM content_units").fetchone()[0])
+            term_posting_count = int(conn.execute("SELECT COUNT(*) FROM term_postings").fetchone()[0])
+            embedding_count = int(conn.execute("SELECT COUNT(*) FROM content_embeddings").fetchone()[0])
+            unit_type_rows = conn.execute(
+                """
+                SELECT unit_type, COUNT(*) AS count
+                FROM content_units
+                GROUP BY unit_type
+                """
+            ).fetchall()
+        unit_type_counts = {"section": 0, "figure": 0, "table": 0}
+        for row in unit_type_rows:
+            unit_type_counts[str(row["unit_type"])] = int(row["count"])
+        faiss_path = faiss_path_for_db(self.db_path)
+        faiss_exists = faiss_path.exists()
+        return {
+            "document_count": document_count,
+            "content_unit_count": content_unit_count,
+            "term_posting_count": term_posting_count,
+            "embedding_count": embedding_count,
+            "unit_type_counts": unit_type_counts,
+            "db_size_bytes": self.db_path.stat().st_size if self.db_path.exists() else 0,
+            "faiss_exists": faiss_exists,
+            "faiss_size_bytes": faiss_path.stat().st_size if faiss_exists else 0,
+        }

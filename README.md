@@ -1,6 +1,6 @@
-# SirChi
+# SearChi
 
-SirChi is a local document search engine with:
+SearChi is a local document search engine with:
 
 - FastAPI web app
 - Google-like search UI
@@ -20,4 +20,20 @@ SirChi is a local document search engine with:
 make rebuild
 ```
 
-The app stores runtime data in `data/`.
+With the default local configuration, runtime data lives under `~/.searchi/`.
+
+The Docker Compose setup still uses the repo-local `./data/` directory explicitly for development convenience.
+
+## CLI
+
+Text output:
+
+```bash
+uv run searchi "chaos attractor"
+```
+
+JSON output:
+
+```bash
+uv run searchi "chaos attractor" --json
+```

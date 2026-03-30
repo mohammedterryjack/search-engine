@@ -7,6 +7,9 @@ from simplemma import lemmatize
 
 
 TOKEN_RE = re.compile(r"[a-z0-9]+", re.IGNORECASE)
+IRREGULAR_NORMALIZATIONS = {
+    "ran": "run",
+}
 STOP_WORDS = {
     "a",
     "an",
@@ -36,7 +39,10 @@ def tokenize(text: str) -> list[str]:
 
 
 def normalize_token(token: str) -> str:
-    lemma = lemmatize(token.lower(), lang="en")
+    lowered = token.lower()
+    if lowered in IRREGULAR_NORMALIZATIONS:
+        return IRREGULAR_NORMALIZATIONS[lowered]
+    lemma = lemmatize(lowered, lang="en")
     return lemma.lower().strip()
 
 

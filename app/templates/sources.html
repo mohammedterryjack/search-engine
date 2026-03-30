@@ -1,17 +1,63 @@
 {% extends "base.html" %}
-{% block title %}Sources - SirChi{% endblock %}
+{% block title %}Sources - SearChi{% endblock %}
 {% block body %}
 <main class="admin-shell">
   <header class="admin-header">
-    <a href="/" class="brand brand-small">SirChi</a>
+    <a href="/" class="brand brand-small">SearChi</a>
     <h1>Sources</h1>
+    <a href="/status" class="secondary-link">Status</a>
   </header>
+
+  <section class="admin-hero-card">
+    <div>
+      <div class="source-hint">Index status, source databases, and ingestion activity all live here.</div>
+    </div>
+    <img src="{{ url_for('static', path='/images/stats.png') }}" alt="" class="stats-hero-image">
+  </section>
+
+  <section class="admin-card">
+    <div class="source-meta">
+      {{ "Indexing active" if indexing_active else "Indexer idle" }}
+    </div>
+    <div class="stats-grid">
+      <div class="stat-tile">
+        <div class="stat-label">Pending jobs</div>
+        <div class="stat-value">{{ global_job_counts.pending }}</div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-label">Running jobs</div>
+        <div class="stat-value">{{ global_job_counts.running }}</div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-label">Done jobs</div>
+        <div class="stat-value">{{ global_job_counts.done }}</div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-label">Failed jobs</div>
+        <div class="stat-value">{{ global_job_counts.failed }}</div>
+      </div>
+    </div>
+  </section>
+
+  {% if running_jobs %}
+  <section class="admin-card">
+    <h3>Active Indexing</h3>
+    {% for job in running_jobs %}
+    <div class="job-row">
+      <span class="job-status job-{{ job.status }}">{{ job.status }}</span>
+      <div class="job-detail">
+        <div>{{ job.document_path }}</div>
+      </div>
+    </div>
+    {% endfor %}
+  </section>
+  {% endif %}
 
   <section class="admin-card">
     <form action="/sources" method="post" class="source-form">
       <label for="source_path">Add whitelist path</label>
       <div class="source-hint">
-        Enter an absolute path under <code>{{ allowed_source_root }}</code>, or use the native picker to fill the field.
+        Enter an absolute path under <code>{{ allowed_source_root }}</code>. You can also double-click the path field to try a browser-native picker.
       </div>
       {% if error %}
       <div class="form-error">{{ error }}</div>
@@ -20,18 +66,14 @@
         <input id="source_path" name="source_path" type="text" class="source-input" placeholder="/absolute/path/or/file" value="{{ source_path }}" required>
         <button type="submit" class="primary-button">Add Source</button>
       </div>
-      <div class="picker-row">
-        <label class="picker-button">
-          <span>Choose File</span>
-          <input id="source_file_picker" type="file" class="native-picker" data-target="source_path">
-        </label>
-        <label class="picker-button">
-          <span>Choose Folder</span>
-          <input id="source_folder_picker" type="file" class="native-picker" webkitdirectory directory multiple data-target="source_path">
-        </label>
+      <div class="picker-row picker-row-hidden" id="picker_mode_row" aria-hidden="true">
+        <button type="button" class="picker-choice" data-picker-target="file">Pick File</button>
+        <button type="button" class="picker-choice" data-picker-target="folder">Pick Folder</button>
       </div>
-      <div class="picker-note">
-        `Choose Folder` uses browser-native directory selection where supported. If your browser does not expose the real path, keep using the manual field.
+      <input id="source_file_picker" type="file" class="native-picker-hidden">
+      <input id="source_folder_picker" type="file" class="native-picker-hidden" webkitdirectory directory multiple>
+      <div class="picker-note" id="picker_note">
+        If the browser picker does not populate a real absolute path, paste the path manually. Web apps cannot reliably read host filesystem paths from native pickers in every browser.
       </div>
     </form>
   </section>
@@ -44,6 +86,12 @@
         <div class="source-meta">{{ row.documents|length }} documents</div>
       </div>
       <div class="source-actions">
+        <form action="/sources/{{ row.source.id }}/repair-index" method="post">
+          <button type="submit" class="secondary-button">Repair Index</button>
+        </form>
+        <form action="/sources/{{ row.source.id }}/retry-failed" method="post">
+          <button type="submit" class="secondary-button">Retry Failed</button>
+        </form>
         <form action="/sources/{{ row.source.id }}/clear" method="post">
           <button type="submit" class="secondary-button">Clear DB</button>
         </form>
@@ -53,12 +101,75 @@
       </div>
     </div>
 
+    <div class="source-stats-grid">
+      <div class="stat-tile">
+        <div class="stat-label">Documents</div>
+        <div class="stat-value">{{ row.stats.document_count }}</div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-label">Content units</div>
+        <div class="stat-value">{{ row.stats.content_unit_count }}</div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-label">Postings</div>
+        <div class="stat-value">{{ row.stats.term_posting_count }}</div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-label">Embeddings</div>
+        <div class="stat-value">{{ row.stats.embedding_count }}</div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-label">Sections</div>
+        <div class="stat-value">{{ row.stats.unit_type_counts.section }}</div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-label">Figures</div>
+        <div class="stat-value">{{ row.stats.unit_type_counts.figure }}</div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-label">Tables</div>
+        <div class="stat-value">{{ row.stats.unit_type_counts.table }}</div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-label">SQLite size</div>
+        <div class="stat-value">{{ format_bytes(row.stats.db_size_bytes) }}</div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-label">FAISS</div>
+        <div class="stat-value">{{ "Present" if row.stats.faiss_exists else "Missing" }}</div>
+        <div class="small-status">{{ format_bytes(row.stats.faiss_size_bytes) if row.stats.faiss_exists else "0 B" }}</div>
+      </div>
+      <div class="stat-tile {{ 'status-ok' if row.vector_report.status == 'ok' else 'status-bad' }}">
+        <div class="stat-label">Vector sync</div>
+        <div class="stat-value">{{ row.vector_report.status|capitalize }}</div>
+        <div class="small-status">
+          Missing {{ row.vector_report.missing_in_faiss|length }} / Stale {{ row.vector_report.stale_in_faiss|length }}
+        </div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-label">Pending / Running</div>
+        <div class="stat-value">{{ row.job_counts.pending }} / {{ row.job_counts.running }}</div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-label">Done / Failed</div>
+        <div class="stat-value">{{ row.job_counts.done }} / {{ row.job_counts.failed }}</div>
+      </div>
+    </div>
+
     <div class="jobs-block">
       <h3>Recent Jobs</h3>
       {% for job in row.jobs %}
       <div class="job-row">
         <span class="job-status job-{{ job.status }}">{{ job.status }}</span>
-        <span>{{ job.document_path }}</span>
+        <div class="job-detail">
+          <div>{{ job.document_path }}</div>
+          {% if job.error_message %}
+          <div class="job-error">{{ job.error_message }}</div>
+          <form action="/jobs/{{ job.id }}/retry" method="post" class="job-retry-form">
+            <button type="submit" class="text-button">Retry Job</button>
+          </form>
+          {% endif %}
+        </div>
       </div>
       {% else %}
       <div class="job-row muted">No jobs yet.</div>
@@ -93,22 +204,78 @@
     const filePicker = document.getElementById("source_file_picker");
     const folderPicker = document.getElementById("source_folder_picker");
     const target = document.getElementById("source_path");
-    if (!target) return;
+    const form = target ? target.closest("form") : null;
+    const pickerNote = document.getElementById("picker_note");
+    const pickerModeRow = document.getElementById("picker_mode_row");
+    if (!target || !form) return;
+
+    function setPickerNote(message, isError) {
+      if (!pickerNote) return;
+      pickerNote.textContent = message;
+      pickerNote.classList.toggle("picker-note-error", Boolean(isError));
+    }
+
+    function showPickerChoices() {
+      if (!pickerModeRow) return;
+      pickerModeRow.classList.remove("picker-row-hidden");
+      pickerModeRow.setAttribute("aria-hidden", "false");
+      setPickerNote("Choose whether you want to add a file or a folder.", false);
+    }
+
+    function hidePickerChoices() {
+      if (!pickerModeRow) return;
+      pickerModeRow.classList.add("picker-row-hidden");
+      pickerModeRow.setAttribute("aria-hidden", "true");
+    }
+
+    function extractAbsolutePath(input, isFolder) {
+      if (!input || !input.files || !input.files.length) return "";
+      const first = input.files[0];
+      const rawPath = typeof first.path === "string" ? first.path : "";
+      if (!rawPath) return "";
+      if (!isFolder) return rawPath;
+      const normalizedPath = rawPath.replace(/\\/g, "/");
+      const webkitPath = first.webkitRelativePath || "";
+      if (!webkitPath) return normalizedPath;
+      const firstSegment = webkitPath.split("/")[0];
+      const suffix = "/" + firstSegment;
+      const cutoff = normalizedPath.lastIndexOf(suffix);
+      if (cutoff === -1) return normalizedPath;
+      return normalizedPath.slice(0, cutoff + suffix.length);
+    }
 
     function assignFromFileInput(input, isFolder) {
       if (!input || !input.files || !input.files.length) return;
-      const first = input.files[0];
-      const webkitPath = first.webkitRelativePath || "";
-      if (isFolder && webkitPath) {
-        const firstSegment = webkitPath.split("/")[0];
-        if (first.path) {
-          target.value = first.path.slice(0, first.path.lastIndexOf("/" + firstSegment) + firstSegment.length + 1);
-          return;
+      const resolvedPath = extractAbsolutePath(input, isFolder);
+      if (!resolvedPath) {
+        setPickerNote(
+          "This browser did not expose a usable absolute path. Paste the host path manually into the field.",
+          true
+        );
+        return;
+      }
+      target.value = resolvedPath;
+      hidePickerChoices();
+      setPickerNote("Path filled from the picker. Submitting source now.", false);
+      form.requestSubmit();
+    }
+
+    target.addEventListener("dblclick", function () {
+      showPickerChoices();
+    });
+
+    if (pickerModeRow) {
+      pickerModeRow.addEventListener("click", function (event) {
+        const button = event.target.closest("[data-picker-target]");
+        if (!button) return;
+        const mode = button.getAttribute("data-picker-target");
+        if (mode === "file" && filePicker) {
+          filePicker.click();
         }
-      }
-      if (first.path) {
-        target.value = first.path;
-      }
+        if (mode === "folder" && folderPicker) {
+          folderPicker.click();
+        }
+      });
     }
 
     if (filePicker) {

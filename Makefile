@@ -1,4 +1,4 @@
-.PHONY: up down logs rebuild ps
+.PHONY: up down logs rebuild ps test
 
 up:
 	docker compose up --build -d --remove-orphans
@@ -14,3 +14,6 @@ rebuild:
 
 ps:
 	docker compose ps
+
+test:
+	uv run --extra dev pytest -q

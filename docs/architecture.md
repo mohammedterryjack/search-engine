@@ -1,13 +1,13 @@
 # Architecture
 
-This document reflects the current `SirChi` architecture as implemented, including known simplifications and open gaps.
+This document reflects the current `SearChi` architecture as implemented, including known simplifications and open gaps.
 
 ## System Diagram
 
 ```text
                                +----------------------+
                                | Browser              |
-                               | SirChi UI            |
+                               | SearChi UI           |
                                | search / sources     |
                                +----------+-----------+
                                           |
@@ -176,6 +176,7 @@ Tables:
 
 - `source_roots`
 - `ingestion_jobs`
+- `service_heartbeats`
 
 ### Per-source DB
 
@@ -197,6 +198,14 @@ Purpose:
 - fast semantic nearest-neighbor lookup over `content_units`
 - vector index keyed by `content_unit_id`
 - kept alongside the per-source SQLite DB
+
+## Runtime Location
+
+Default local runtime state is intended to live under:
+
+- `~/.searchi/`
+
+The Docker Compose development setup overrides that and keeps runtime data in repo-local `./data/`.
 
 ## Current Retrieval Semantics
 
@@ -259,12 +268,30 @@ Important caveat:
 - the extraction layer is still being validated against real PDF outputs
 - actual Docling structure quality remains the biggest area that still needs empirical verification
 
+## Bounding Boxes
+
+The installed Docling stack exposes spatial provenance fields including:
+
+- `page_no`
+- `bbox`
+- `charspan`
+
+and the bounding box object exposes:
+
+- `l`
+- `t`
+- `r`
+- `b`
+- `coord_origin`
+
+So bounding-box overlays are technically feasible enough to stay on the roadmap, but still need UI-side validation before they should be treated as committed functionality.
+
 ## UI / UX Notes
 
 ### Homepage
 
 - Google-like centered search page
-- `SirChi` branding
+- `SearChi` branding
 - Chi image background styling
 
 ### Sources view

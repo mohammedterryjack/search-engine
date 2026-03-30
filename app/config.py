@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from functools import lru_cache
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -13,15 +14,26 @@ class Settings:
     allowed_source_root: Path
     vector_model_name: str
     enable_vector_retrieval: bool
+    vector_min_score_default: float
     reranker_url: str
+    status_token: str
     enable_reranker: bool
     poll_seconds: float
 
 
+def default_data_dir() -> Path:
+    return (Path.home() / ".searchi").resolve()
+
+
+def legacy_repo_data_dir() -> Path:
+    return (Path.cwd() / "data").resolve()
+
+
+@lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    data_dir = Path(os.getenv("SEARCHY_DATA_DIR", "data")).resolve()
+    data_dir = Path(os.getenv("SEARCHY_DATA_DIR", str(default_data_dir()))).resolve()
     app_db_path = Path(
-        os.getenv("SEARCHY_APP_DB_PATH", str(data_dir / "app_data" / "searchy_app.sqlite3"))
+        os.getenv("SEARCHY_APP_DB_PATH", str(data_dir / "app_data" / "searchi_app.sqlite3"))
     ).resolve()
     source_db_dir = Path(
         os.getenv("SEARCHY_SOURCE_DB_DIR", str(data_dir / "source_dbs"))
@@ -32,7 +44,9 @@ def get_settings() -> Settings:
         "sentence-transformers/all-MiniLM-L6-v2",
     )
     enable_vector_retrieval = os.getenv("SEARCHY_ENABLE_VECTOR_RETRIEVAL", "1") == "1"
+    vector_min_score_default = float(os.getenv("SEARCHY_VECTOR_MIN_SCORE_DEFAULT", "0.2"))
     reranker_url = os.getenv("SEARCHY_RERANKER_URL", "http://localhost:8010")
+    status_token = os.getenv("SEARCHY_STATUS_TOKEN", "searchi-local-status")
     enable_reranker = os.getenv("SEARCHY_ENABLE_RERANKER", "1") == "1"
     poll_seconds = float(os.getenv("SEARCHY_POLL_SECONDS", "3"))
 
@@ -43,7 +57,9 @@ def get_settings() -> Settings:
         allowed_source_root=allowed_source_root,
         vector_model_name=vector_model_name,
         enable_vector_retrieval=enable_vector_retrieval,
+        vector_min_score_default=vector_min_score_default,
         reranker_url=reranker_url,
+        status_token=status_token,
         enable_reranker=enable_reranker,
         poll_seconds=poll_seconds,
     )

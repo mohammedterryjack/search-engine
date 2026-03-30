@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Status - SearChi{% endblock %}
+{% block body %}
+<main class="admin-shell">
+  <header class="admin-header">
+    <a href="/" class="brand brand-small">SearChi</a>
+    <h1>Status</h1>
+  </header>
+
+  <section class="admin-hero-card">
+    <div class="source-hint">System health, model state, and aggregate indexing counts live here.</div>
+    <img src="{{ url_for('static', path='/images/status.png') }}" alt="" class="stats-hero-image">
+  </section>
+
+  <section class="admin-card">
+    <div class="stats-grid">
+      <div class="stat-tile">
+        <div class="stat-label">Sources</div>
+        <div class="stat-value">{{ source_count }}</div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-label">Documents</div>
+        <div class="stat-value">{{ document_count }}</div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-label">Content units</div>
+        <div class="stat-value">{{ content_unit_count }}</div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-label">Embeddings</div>
+        <div class="stat-value">{{ embedding_count }}</div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-label">Postings</div>
+        <div class="stat-value">{{ term_posting_count }}</div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-label">Poll interval</div>
+        <div class="stat-value">{{ poll_seconds }}s</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="admin-card">
+    <div class="source-stats-grid">
+      <div class="stat-tile status-ok">
+        <div class="stat-label">Web</div>
+        <div class="stat-value">{{ web_status|capitalize }}</div>
+      </div>
+      <div class="stat-tile {{ 'status-ok' if worker_status == 'ok' else 'status-bad' if worker_status == 'stale' else 'status-neutral' }}">
+        <div class="stat-label">Worker</div>
+        <div class="stat-value">{{ worker_status|capitalize }}</div>
+        {% if worker_detail %}
+        <div class="small-status">{{ worker_detail }}</div>
+        {% endif %}
+      </div>
+      <div class="stat-tile">
+        <div class="stat-label">Pending jobs</div>
+        <div class="stat-value">{{ job_counts.pending }}</div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-label">Running jobs</div>
+        <div class="stat-value">{{ job_counts.running }}</div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-label">Done jobs</div>
+        <div class="stat-value">{{ job_counts.done }}</div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-label">Failed jobs</div>
+        <div class="stat-value">{{ job_counts.failed }}</div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-label">Vector retrieval</div>
+        <div class="stat-value">{{ "Enabled" if vector_enabled else "Disabled" }}</div>
+        <div class="small-status">{{ vector_model_name }}</div>
+      </div>
+      <div class="stat-tile {{ 'status-ok' if reranker_health.status == 'ok' else 'status-bad' if reranker_health.status == 'error' else 'status-neutral' }}">
+        <div class="stat-label">Reranker</div>
+        <div class="stat-value">
+          {% if not reranker_enabled %}
+          Disabled
+          {% else %}
+          {{ reranker_health.status|capitalize }}
+          {% endif %}
+        </div>
+        {% if reranker_health.model_name %}
+        <div class="small-status">{{ reranker_health.model_name }}</div>
+        {% endif %}
+        {% if reranker_health.device %}
+        <div class="small-status">{{ reranker_health.device }}</div>
+        {% elif reranker_health.error %}
+        <div class="small-status">{{ reranker_health.error }}</div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+</main>
+{% endblock %}

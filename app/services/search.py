@@ -42,7 +42,13 @@ def bm25_score(
     return score
 
 
-def search_all_sources(query: str, source_root_ids: set[int] | None = None) -> list[SearchResult]:
+def search_all_sources(
+    query: str,
+    source_root_ids: set[int] | None = None,
+    *,
+    unit_types: set[str] | None = None,
+    vector_min_score: float | None = None,
+) -> list[SearchResult]:
     terms = normalized_terms(query)
     if not terms:
         return []
@@ -60,6 +66,8 @@ def search_all_sources(query: str, source_root_ids: set[int] | None = None) -> l
             db_path=Path(str(source_root["db_path"])),
             query=query,
             terms=terms,
+            unit_types=unit_types,
+            vector_min_score=vector_min_score,
         )
         results.extend(source_results)
 
@@ -77,6 +85,8 @@ def search_source_db(
     db_path: Path,
     query: str,
     terms: list[str],
+    unit_types: set[str] | None = None,
+    vector_min_score: float | None = None,
 ) -> list[SearchResult]:
     if not db_path.exists():
         return []
@@ -87,6 +97,7 @@ def search_source_db(
         source_path=source_path,
         db_path=db_path,
         terms=terms,
+        unit_types=unit_types,
     )
     semantic_results: list[SearchResult] = []
     settings = get_settings()
@@ -96,6 +107,8 @@ def search_source_db(
             source_path=source_path,
             db_path=db_path,
             query=query,
+            unit_types=unit_types,
+            vector_min_score=vector_min_score,
         )
     return fuse_results(lexical_results, semantic_results, limit=100)
 
@@ -106,10 +119,17 @@ def lexical_search_source_db(
     source_path: str,
     db_path: Path,
     terms: list[str],
+    unit_types: set[str] | None = None,
 ) -> list[SearchResult]:
     store = SourceStore(db_path)
     with store.connect() as conn:
-        placeholders = ", ".join("?" for _ in terms)
+        term_placeholders = ", ".join("?" for _ in terms)
+        params: list[object] = list(terms)
+        unit_type_clause = ""
+        if unit_types:
+            unit_placeholders = ", ".join("?" for _ in unit_types)
+            unit_type_clause = f" AND cu.unit_type IN ({unit_placeholders})"
+            params.extend(sorted(unit_types))
         rows = conn.execute(
             f"""
             SELECT
@@ -127,9 +147,9 @@ def lexical_search_source_db(
             FROM term_postings tp
             JOIN content_units cu ON cu.id = tp.content_unit_id
             JOIN documents d ON d.id = cu.document_id
-            WHERE tp.term IN ({placeholders})
+            WHERE tp.term IN ({term_placeholders}){unit_type_clause}
             """,
-            terms,
+            params,
         ).fetchall()
         if not rows:
             return []
@@ -191,11 +211,14 @@ def semantic_search_source_db(
     source_path: str,
     db_path: Path,
     query: str,
+    unit_types: set[str] | None = None,
+    vector_min_score: float | None = None,
 ) -> list[SearchResult]:
     store = SourceStore(db_path)
-    vector_hits = query_faiss_index(db_path, query, limit=100)
+    vector_hits = query_faiss_index(db_path, query, limit=300)
     if not vector_hits:
         return []
+    effective_min_score = vector_min_score if vector_min_score is not None else float("-inf")
     content_unit_ids = [content_unit_id for content_unit_id, _score in vector_hits]
     rows = store.content_units_by_ids(content_unit_ids)
     row_by_id = {int(row["content_unit_id"]): row for row in rows}
@@ -206,6 +229,10 @@ def semantic_search_source_db(
             raise SearchPipelineError(
                 f"Vector index returned content_unit_id={content_unit_id}, but SQLite has no matching row."
             )
+        if unit_types and str(row["unit_type"]) not in unit_types:
+            continue
+        if score < effective_min_score:
+            continue
         results.append(
             SearchResult(
                 source_root_id=source_root_id,
@@ -221,7 +248,7 @@ def semantic_search_source_db(
                 score=float(score),
             )
         )
-    return results
+    return results[:100]
 
 
 def fuse_results(
