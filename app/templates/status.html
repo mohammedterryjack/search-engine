@@ -3,13 +3,15 @@
 {% block body %}
 <main class="admin-shell">
   <header class="admin-header">
-    <a href="/" class="brand brand-small">searChi</a>
+    <a href="/" class="brand brand-small"><span class="brand-letter">s</span><span class="brand-letter">e</span><span class="brand-letter">a</span><span class="brand-letter">r</span><span class="brand-letter">C</span><span class="brand-letter">h</span><span class="brand-letter">i</span></a>
     <h1>Status</h1>
     <a href="/sources" class="secondary-link">Sources</a>
   </header>
 
-  <section class="admin-card">
-    <img src="{{ url_for('static', path='/images/status.png') }}" alt="" class="status-watermark-image">
+  <section class="admin-card admin-card-with-image">
+    <div class="status-hero-wrapper">
+      <img src="{{ url_for('static', path='/images/status.png') }}" alt="" class="status-hero-image">
+    </div>
     <div class="source-hint">System health, model state, and aggregate indexing counts live here.</div>
     <div class="stats-grid">
       <div class="stat-tile">

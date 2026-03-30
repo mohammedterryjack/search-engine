@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% block title %}{{ query }} - searChi{% endblock %}
+{% block title %}{{ document_scope_title or query }} - searChi{% endblock %}
 {% block body %}
 <header class="topbar">
-  <a href="/" class="brand brand-small">searChi</a>
+  <a href="/" class="brand brand-small"><span class="brand-letter">s</span><span class="brand-letter">e</span><span class="brand-letter">a</span><span class="brand-letter">r</span><span class="brand-letter">C</span><span class="brand-letter">h</span><span class="brand-letter">i</span></a>
   <form action="/search" method="get" class="search-form results-search-form">
     <div class="search-bar-row">
       <div class="search-input-wrap">
@@ -61,26 +61,36 @@
           </div>
         </div>
       </details>
-      <button type="submit" class="primary-button icon-button" aria-label="Search" title="Search">&#128269;</button>
     </div>
   </form>
 </header>
 <main class="results-layout">
   <section class="results-column">
+    {% if document_scope_title %}
+    <div class="results-meta">{{ document_scope_title }}</div>
+    {% endif %}
     {% if search_error %}
     <div class="form-error">{{ search_error }}</div>
     {% endif %}
     {% if search_warning %}
     <div class="form-success">{{ search_warning }}</div>
     {% endif %}
-    {% if query %}
+    {% if results_meta_label %}
+    <div class="results-meta">{{ results_meta_label }}</div>
+    {% elif query %}
     <div class="results-meta">{{ results|length }} results</div>
     {% endif %}
     {% for result in results %}
     <article class="result-card">
       <div class="result-path">{{ result.document_path }}</div>
       <h2 class="result-title">
-        <a href="/open/{{ result.source_root_id }}/{{ result.content_unit_id }}">{{ result.section_name or result.filename }}</a>
+        <a href="/open/{{ result.source_root_id }}/{{ result.content_unit_id }}">
+          {% if result.unit_type == "section" %}
+          {{ result.section_name or result.filename }}
+          {% else %}
+          {{ result.unit_type|capitalize }} · {{ result.section_name or result.filename }}
+          {% endif %}
+        </a>
       </h2>
       <div class="result-subtitle">
         <span>{{ result.unit_type }}</span>
@@ -107,6 +117,14 @@
       }
       input.addEventListener("input", sync);
       sync();
+    });
+    document.querySelectorAll(".advanced-option input[type=\"checkbox\"]").forEach((checkbox) => {
+      checkbox.addEventListener("change", function () {
+        const form = this.form;
+        if (form) {
+          form.requestSubmit();
+        }
+      });
     });
   })();
 </script>

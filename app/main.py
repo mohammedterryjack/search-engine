@@ -15,7 +15,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from app.config import get_settings, legacy_repo_data_dir
+from app.config import get_settings
 from app.db.global_store import GlobalStore
 from app.db.source_store import SourceStore
 from app.services.ingest import list_supported_documents
@@ -72,15 +72,6 @@ def reranker_health() -> dict[str, object]:
 
 
 def ensure_runtime_dirs() -> None:
-    legacy_data = legacy_repo_data_dir()
-    if (
-        "SEARCHY_DATA_DIR" not in os.environ
-        and legacy_data.exists()
-        and not settings.data_dir.exists()
-        and legacy_data != settings.data_dir
-    ):
-        settings.data_dir.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(str(legacy_data), str(settings.data_dir))
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     settings.app_db_path.parent.mkdir(parents=True, exist_ok=True)
     settings.source_db_dir.mkdir(parents=True, exist_ok=True)
@@ -171,11 +162,16 @@ def get_content_unit(source_root_id: int, content_unit_id: int) -> tuple[Path, o
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request) -> HTMLResponse:
     store = GlobalStore()
+    document_count = 0
+    for row in store.list_source_roots():
+        stats = SourceStore(Path(str(row["db_path"]))).stats()
+        document_count += int(stats["document_count"])
     return templates.TemplateResponse(
         request,
         "index.html",
         {
             "sources": store.list_source_roots(),
+            "document_count": document_count,
             "jobs": store.list_jobs()[:10],
             "default_vector_min_score": settings.vector_min_score_default,
             "all_unit_types": ["section", "figure", "table"],
@@ -228,6 +224,8 @@ async def search(
             "vector_min_score": effective_vector_min_score,
             "search_error": search_error,
             "search_warning": search_warning,
+            "results_meta_label": None,
+            "document_scope_title": None,
         },
     )
 
@@ -324,6 +322,54 @@ async def status_view(request: Request) -> HTMLResponse:
                 stale_after_seconds=worker_stale_after_seconds,
             ),
             "worker_detail": str(worker_heartbeat["detail"]) if worker_heartbeat else "",
+        },
+    )
+
+
+@app.get("/sources/{source_root_id}/documents/{document_id}", response_class=HTMLResponse)
+async def document_results_view(request: Request, source_root_id: int, document_id: int) -> HTMLResponse:
+    store = GlobalStore()
+    source_root = store.get_source_root(source_root_id)
+    if source_root is None:
+        raise HTTPException(status_code=404, detail="Source not found")
+    source_store = SourceStore(Path(str(source_root["db_path"])))
+    rows = source_store.content_units_for_document(document_id)
+    if not rows:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    from app.models import SearchResult
+
+    results = [
+        SearchResult(
+            source_root_id=source_root_id,
+            source_path=str(source_root["source_path"]),
+            document_id=int(row["document_id"]),
+            content_unit_id=int(row["content_unit_id"]),
+            document_path=str(row["document_path"]),
+            filename=str(row["filename"]),
+            unit_type=str(row["unit_type"]),
+            page_number=int(row["page_number"]) if row["page_number"] is not None else None,
+            section_name=str(row["section_name"]),
+            display_text=str(row["display_text"]),
+            score=0.0,
+        )
+        for row in rows
+    ]
+    return templates.TemplateResponse(
+        request,
+        "results.html",
+        {
+            "query": "",
+            "results": results,
+            "sources": store.list_source_roots(),
+            "selected_sources": {source_root_id},
+            "selected_unit_types": {"section", "figure", "table"},
+            "all_unit_types": ["section", "figure", "table"],
+            "vector_min_score": settings.vector_min_score_default,
+            "search_error": None,
+            "search_warning": None,
+            "document_scope_title": f"Document View · {rows[0]['filename']}",
+            "results_meta_label": f"{len(results)} content unit{'s' if len(results) != 1 else ''}",
         },
     )
 

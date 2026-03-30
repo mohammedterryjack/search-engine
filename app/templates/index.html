@@ -5,7 +5,7 @@
 <main class="home-shell">
   <img src="{{ url_for('static', path='/images/home.png') }}" alt="" class="home-cat-image">
   <header class="home-header">
-    <div class="brand">searChi</div>
+    <div class="brand"><span class="brand-letter">s</span><span class="brand-letter">e</span><span class="brand-letter">a</span><span class="brand-letter">r</span><span class="brand-letter">C</span><span class="brand-letter">h</span><span class="brand-letter">i</span></div>
   </header>
   <section class="search-card">
     <form action="/search" method="get" class="search-form home-search-form">
@@ -63,13 +63,11 @@
             </div>
           </div>
         </details>
-        <button type="submit" class="primary-button icon-button" aria-label="Search" title="Search">&#128269;</button>
       </div>
     </form>
   </section>
   <section class="status-strip">
-    <span>{{ sources|length }} source{{ '' if sources|length == 1 else 's' }}</span>
-    <a href="/sources" class="secondary-link">Sources</a>
+    <a href="/sources" class="secondary-link">{{ document_count }} Document{{ '' if document_count == 1 else 's' }}</a>
     <a href="/status" class="secondary-link">Status</a>
   </section>
 </main>
@@ -83,6 +81,14 @@
       }
       input.addEventListener("input", sync);
       sync();
+    });
+    document.querySelectorAll(".advanced-option input[type=\"checkbox\"]").forEach((checkbox) => {
+      checkbox.addEventListener("change", function () {
+        const form = this.form;
+        if (form) {
+          form.requestSubmit();
+        }
+      });
     });
   })();
 </script>

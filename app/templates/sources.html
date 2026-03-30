@@ -3,7 +3,7 @@
 {% block body %}
 <main class="admin-shell">
   <header class="admin-header">
-    <a href="/" class="brand brand-small">searChi</a>
+    <a href="/" class="brand brand-small"><span class="brand-letter">s</span><span class="brand-letter">e</span><span class="brand-letter">a</span><span class="brand-letter">r</span><span class="brand-letter">C</span><span class="brand-letter">h</span><span class="brand-letter">i</span></a>
     <h1>Sources</h1>
     <a href="/status" class="secondary-link">Status</a>
   </header>
@@ -175,7 +175,7 @@
       {% for document in row.documents %}
       <div class="document-row">
         <div>
-          <div class="document-title">{{ document.filename }}</div>
+          <div class="document-title"><a href="/sources/{{ row.source.id }}/documents/{{ document.id }}" class="document-link">{{ document.filename }}</a></div>
           <div class="document-meta">{{ document.source_path }}</div>
         </div>
         <form action="/sources/{{ row.source.id }}/documents/{{ document.id }}/delete" method="post">

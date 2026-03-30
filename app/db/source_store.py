@@ -301,6 +301,36 @@ class SourceStore:
             ).fetchall()
         return rows
 
+    def content_units_for_document(self, document_id: int) -> list[sqlite3.Row]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT
+                    cu.id AS content_unit_id,
+                    cu.document_id,
+                    cu.unit_type,
+                    cu.page_number,
+                    cu.section_name,
+                    cu.display_text,
+                    d.source_path AS document_path,
+                    d.filename
+                FROM content_units cu
+                JOIN documents d ON d.id = cu.document_id
+                WHERE cu.document_id = ?
+                ORDER BY
+                    COALESCE(cu.page_number, 0) ASC,
+                    CASE cu.unit_type
+                        WHEN 'section' THEN 1
+                        WHEN 'figure' THEN 2
+                        WHEN 'table' THEN 3
+                        ELSE 9
+                    END ASC,
+                    cu.id ASC
+                """,
+                (document_id,),
+            ).fetchall()
+        return rows
+
     def document_content_unit_texts(self, document_id: int) -> list[tuple[int, str]]:
         with self.connect() as conn:
             rows = conn.execute(

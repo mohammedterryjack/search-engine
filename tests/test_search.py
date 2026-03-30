@@ -6,7 +6,13 @@ from pathlib import Path
 from app.db.global_store import utc_now
 from app.db.source_store import SourceStore
 from app.models import SearchResult
-from app.services.search import bm25_score, fuse_results, rerank_results, semantic_search_source_db
+from app.services.search import (
+    bm25_score,
+    fuse_results,
+    lexical_search_source_db,
+    rerank_results,
+    semantic_search_source_db,
+)
 from app.services.tokenize import term_frequencies
 
 
@@ -123,8 +129,21 @@ def test_rerank_results_uses_reranker_response(monkeypatch) -> None:
         SearchResult(1, "/src", 1, 1, "/doc1", "doc1", "section", 1, "A", "alpha", 0.3),
         SearchResult(1, "/src", 1, 2, "/doc2", "doc2", "section", 1, "B", "beta", 0.2),
     ]
-    reranked = rerank_results("query", results)
+    reranked, warning = rerank_results("query", results)
+    assert warning is None
     assert [item.content_unit_id for item in reranked] == [2, 1]
+
+
+def test_rerank_results_timeout_falls_back_with_warning(monkeypatch) -> None:
+    monkeypatch.setattr("urllib.request.urlopen", lambda *args, **kwargs: (_ for _ in ()).throw(TimeoutError()))
+
+    results = [
+        SearchResult(1, "/src", 1, 1, "/doc1", "doc1", "section", 1, "A", "alpha", 0.3),
+        SearchResult(1, "/src", 1, 2, "/doc2", "doc2", "section", 1, "B", "beta", 0.2),
+    ]
+    reranked, warning = rerank_results("query", results)
+    assert [item.content_unit_id for item in reranked] == [1, 2]
+    assert warning == "Reranker request timed out. Showing lexical/vector ranking without reranking."
 
 
 def test_semantic_search_repairs_stale_vector_ids(monkeypatch, tmp_path: Path) -> None:
@@ -178,3 +197,120 @@ def test_semantic_search_repairs_stale_vector_ids(monkeypatch, tmp_path: Path) -
     assert [item.content_unit_id for item in results] == [1]
     assert warning == "Removed 1 stale vector entry from the semantic index."
     assert removed == [999]
+
+
+def test_lexical_search_respects_unit_type_filter(tmp_path: Path) -> None:
+    doc_path = tmp_path / "paper.pdf"
+    doc_path.write_text("placeholder")
+    store = SourceStore(tmp_path / "source.sqlite3")
+    document_id = store.upsert_document(
+        document_path=doc_path,
+        status="indexed",
+        page_count=1,
+        created_at=utc_now(),
+        updated_at=utc_now(),
+    )
+    store.replace_content_units(
+        document_id,
+        [
+            {
+                "unit_type": "section",
+                "page_number": 1,
+                "section_name": "Section A",
+                "anchor_key": "section-1",
+                "text_content": "chaos attractor",
+                "caption": "",
+                "display_text": "chaos attractor",
+                "token_count": 2,
+                "created_at": utc_now(),
+                "terms": term_frequencies("chaos attractor"),
+                "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+            },
+            {
+                "unit_type": "figure",
+                "page_number": 1,
+                "section_name": "Figure A",
+                "anchor_key": "figure-1",
+                "text_content": "chaos attractor",
+                "caption": "Chaos figure",
+                "display_text": "Chaos figure",
+                "token_count": 2,
+                "created_at": utc_now(),
+                "terms": term_frequencies("chaos attractor"),
+                "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+            },
+        ],
+    )
+
+    results = lexical_search_source_db(
+        source_root_id=1,
+        source_path="/src",
+        db_path=store.db_path,
+        terms=["chaos"],
+        unit_types={"figure"},
+    )
+
+    assert len(results) == 1
+    assert results[0].unit_type == "figure"
+
+
+def test_semantic_search_respects_unit_type_filter(monkeypatch, tmp_path: Path) -> None:
+    doc_path = tmp_path / "paper.pdf"
+    doc_path.write_text("placeholder")
+    store = SourceStore(tmp_path / "source.sqlite3")
+    document_id = store.upsert_document(
+        document_path=doc_path,
+        status="indexed",
+        page_count=1,
+        created_at=utc_now(),
+        updated_at=utc_now(),
+    )
+    store.replace_content_units(
+        document_id,
+        [
+            {
+                "unit_type": "section",
+                "page_number": 1,
+                "section_name": "Section A",
+                "anchor_key": "section-1",
+                "text_content": "chaos attractor",
+                "caption": "",
+                "display_text": "chaos attractor",
+                "token_count": 2,
+                "created_at": utc_now(),
+                "terms": term_frequencies("chaos attractor"),
+                "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+            },
+            {
+                "unit_type": "figure",
+                "page_number": 1,
+                "section_name": "Figure A",
+                "anchor_key": "figure-1",
+                "text_content": "chaos attractor",
+                "caption": "Chaos figure",
+                "display_text": "Chaos figure",
+                "token_count": 2,
+                "created_at": utc_now(),
+                "terms": term_frequencies("chaos attractor"),
+                "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+            },
+        ],
+    )
+
+    monkeypatch.setattr(
+        "app.services.search.query_faiss_index",
+        lambda _db_path, _query, limit=300: [(1, 0.8), (2, 0.7)],
+    )
+
+    results, warning = semantic_search_source_db(
+        source_root_id=1,
+        source_path="/src",
+        db_path=store.db_path,
+        query="chaos system",
+        unit_types={"figure"},
+        vector_min_score=0.0,
+    )
+
+    assert warning is None
+    assert len(results) == 1
+    assert results[0].unit_type == "figure"

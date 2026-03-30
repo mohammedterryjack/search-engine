@@ -77,7 +77,11 @@ def search_all_sources(
     if not results:
         return SearchResponse(results=[], warning=" ".join(warnings) if warnings else None)
 
-    reranked = rerank_results(query, results[:100])
+    reranked, rerank_warning = rerank_results(query, results[:100])
+    if unit_types:
+        reranked = [result for result in reranked if result.unit_type in unit_types]
+    if rerank_warning:
+        warnings.append(rerank_warning)
     return SearchResponse(results=reranked, warning=" ".join(warnings) if warnings else None)
 
 
@@ -317,10 +321,10 @@ def _average_doc_length(conn: sqlite3.Connection) -> float:
     return float(value or 0.0)
 
 
-def rerank_results(query: str, results: list[SearchResult]) -> list[SearchResult]:
+def rerank_results(query: str, results: list[SearchResult]) -> tuple[list[SearchResult], str | None]:
     settings = get_settings()
     if not settings.enable_reranker or not results:
-        return results
+        return results, None
 
     payload = {
         "query": query,
@@ -351,18 +355,21 @@ def rerank_results(query: str, results: list[SearchResult]) -> list[SearchResult
                 )
             result.score = by_id[result.content_unit_id]
         results.sort(key=lambda item: item.score, reverse=True)
+        return results, None
     except urllib.error.HTTPError as exc:
         raise SearchPipelineError(
             f"Reranker returned HTTP {exc.code} from {settings.reranker_url}."
         ) from exc
     except urllib.error.URLError as exc:
+        reason = getattr(exc, "reason", None)
+        if isinstance(reason, TimeoutError) or "timed out" in str(reason).lower():
+            return results, "Reranker request timed out. Showing lexical/vector ranking without reranking."
         raise SearchPipelineError(
             f"Could not reach reranker at {settings.reranker_url}: {exc.reason}."
         ) from exc
     except TimeoutError as exc:
-        raise SearchPipelineError("Reranker request timed out.") from exc
+        return results, "Reranker request timed out. Showing lexical/vector ranking without reranking."
     except json.JSONDecodeError as exc:
         raise SearchPipelineError("Reranker returned invalid JSON.") from exc
     except (KeyError, TypeError, ValueError) as exc:
         raise SearchPipelineError(f"Invalid reranker response: {exc}.") from exc
-    return results

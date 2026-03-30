@@ -6,7 +6,7 @@ services:
       - "18000:8000"
     volumes:
       - .:/app
-      - ./data:/app/data
+      - ${HOME}/.searchi:/app/data
       - /Users:/Users:ro
     environment:
       SEARCHY_DATA_DIR: /app/data
@@ -26,7 +26,7 @@ services:
     command: python -m app.worker.runner
     volumes:
       - .:/app
-      - ./data:/app/data
+      - ${HOME}/.searchi:/app/data
       - /Users:/Users:ro
     environment:
       SEARCHY_DATA_DIR: /app/data
@@ -43,7 +43,7 @@ services:
     command: uvicorn app.reranker_api:app --host 0.0.0.0 --port 8010 --reload
     volumes:
       - .:/app
-      - ./data:/app/data
+      - ${HOME}/.searchi:/app/data
     environment:
       SEARCHY_ENABLE_RERANKER: "0"
       SEARCHY_STATUS_TOKEN: searchi-local-status

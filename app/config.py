@@ -25,9 +25,6 @@ def default_data_dir() -> Path:
     return (Path.home() / ".searchi").resolve()
 
 
-def legacy_repo_data_dir() -> Path:
-    return (Path.cwd() / "data").resolve()
-
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
