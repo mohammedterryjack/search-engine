@@ -1,5 +1,5 @@
 [project]
-name = "searchy"
+name = "searchi"
 version = "0.1.0"
 description = "Local document search engine with FastAPI, SQLite, and async ingestion."
 readme = "README.md"

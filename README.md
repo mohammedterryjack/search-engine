@@ -22,7 +22,7 @@ make rebuild
 
 With the default local configuration, runtime data lives under `~/.searchi/`.
 
-The Docker Compose setup still uses the repo-local `./data/` directory explicitly for development convenience.
+The Docker Compose setup also points at the host `~/.searchi/` directory via a bind mount (so nothing is written to `./data/` anymore).
 
 ## HTTP API
 

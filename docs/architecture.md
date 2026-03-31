@@ -206,7 +206,7 @@ Default local runtime state is intended to live under:
 
 - `~/.searchi/`
 
-The Docker Compose development setup overrides that and keeps runtime data in repo-local `./data/`.
+Docker Compose mounts that same `~/.searchi/` directory into every service, so runtime state never travels into `./data/` (which can now be removed once Compose is stopped).
 
 ## Current Retrieval Semantics
 

@@ -2356,7 +2356,7 @@ wheels = [
 ]
 
 [[package]]
-name = "searchy"
+name = "searchi"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

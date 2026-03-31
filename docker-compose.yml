@@ -6,12 +6,12 @@ services:
       - "18000:8000"
     volumes:
       - .:/app
-      - ${HOME}/.searchi:/app/data
+      - ${HOME}/.searchi:/searchi_data
       - /Users:/Users:ro
     environment:
-      SEARCHY_DATA_DIR: /app/data
-      SEARCHY_APP_DB_PATH: /app/data/app_data/searchy_app.sqlite3
-      SEARCHY_SOURCE_DB_DIR: /app/data/source_dbs
+      SEARCHY_DATA_DIR: /searchi_data
+      SEARCHY_APP_DB_PATH: /searchi_data/app_data/searchy_app.sqlite3
+      SEARCHY_SOURCE_DB_DIR: /searchi_data/source_dbs
       SEARCHY_ALLOWED_SOURCE_ROOT: /Users
       SEARCHY_VECTOR_MODEL: sentence-transformers/all-MiniLM-L6-v2
       SEARCHY_ENABLE_VECTOR_RETRIEVAL: "1"
@@ -26,12 +26,12 @@ services:
     command: python -m app.worker.runner
     volumes:
       - .:/app
-      - ${HOME}/.searchi:/app/data
+      - ${HOME}/.searchi:/searchi_data
       - /Users:/Users:ro
     environment:
-      SEARCHY_DATA_DIR: /app/data
-      SEARCHY_APP_DB_PATH: /app/data/app_data/searchy_app.sqlite3
-      SEARCHY_SOURCE_DB_DIR: /app/data/source_dbs
+      SEARCHY_DATA_DIR: /searchi_data
+      SEARCHY_APP_DB_PATH: /searchi_data/app_data/searchy_app.sqlite3
+      SEARCHY_SOURCE_DB_DIR: /searchi_data/source_dbs
       SEARCHY_ALLOWED_SOURCE_ROOT: /Users
       SEARCHY_VECTOR_MODEL: sentence-transformers/all-MiniLM-L6-v2
       SEARCHY_ENABLE_VECTOR_RETRIEVAL: "1"
@@ -43,7 +43,7 @@ services:
     command: uvicorn app.reranker_api:app --host 0.0.0.0 --port 8010 --reload
     volumes:
       - .:/app
-      - ${HOME}/.searchi:/app/data
+      - ${HOME}/.searchi:/searchi_data
     environment:
       SEARCHY_ENABLE_RERANKER: "0"
       SEARCHY_STATUS_TOKEN: searchi-local-status
