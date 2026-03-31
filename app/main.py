@@ -446,14 +446,15 @@ async def document_results_view(request: Request, source_root_id: int, document_
                 filename=str(row["filename"]),
                 unit_type=str(row["unit_type"]),
                 page_number=int(row["page_number"]) if row["page_number"] is not None else None,
-                section_name=str(row["section_name"]),
-                display_text=str(row["display_text"]),
+                section_name=str(row["section_name"]) if row["section_name"] is not None else "",
+                display_text=str(row["display_text"]) if row["display_text"] is not None else "",
                 image_mime=row["image_mime"],
                 image_data=row["image_data"],
                 score=0.0,
             )
             for row in rows
         ]
+    _apply_highlights(results, "")
     return templates.TemplateResponse(
         request,
         "results.html",

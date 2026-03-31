@@ -260,7 +260,7 @@ def extract_structured_units(doc: Any) -> list[ParsedUnit]:
                     )
 
     flush_section()
-    return units
+    return _merge_sections(units)
 
 
 def item_label(item: Any) -> str:
@@ -372,3 +372,44 @@ def build_units(parsed_units: list[ParsedUnit]) -> list[dict[str, object]]:
             }
         )
     return units
+
+
+def _merge_sections(units: list[ParsedUnit]) -> list[ParsedUnit]:
+    merged: list[ParsedUnit] = []
+    prev: ParsedUnit | None = None
+    prev_key: str | None = None
+    for unit in units:
+        if unit.unit_type != "section":
+            merged.append(unit)
+            prev = None
+            prev_key = None
+            continue
+        key = _normalize_section_name(unit.section_name)
+        if prev is not None and prev_key == key:
+            prev.text_content = _join_text(prev.text_content, unit.text_content)
+            prev.display_text = _join_text(prev.display_text, unit.display_text)
+            prev.caption = _join_text(prev.caption, unit.caption)
+            prev.anchor_key = prev.anchor_key or unit.anchor_key
+            continue
+        merged.append(unit)
+        prev = unit
+        prev_key = key
+    return merged
+
+
+def _normalize_section_name(section_name: str) -> str:
+    candidate = re.sub(r"^[\d\s\.)-:,]+", "", section_name or "", flags=re.UNICODE)
+    collapsed = re.sub(r"\s+", " ", candidate).strip().lower()
+    if not collapsed:
+        return ""
+    if "reference" in collapsed or "bibliograph" in collapsed:
+        return "references"
+    return collapsed
+
+
+def _join_text(existing: str, addition: str) -> str:
+    if not existing:
+        return addition
+    if not addition:
+        return existing
+    return f"{existing}\n\n{addition}"

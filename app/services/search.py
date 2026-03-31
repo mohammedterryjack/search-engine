@@ -175,8 +175,8 @@ def lexical_search_source_db(
                 "document_id": int(row["document_id"]),
                 "unit_type": str(row["unit_type"]),
                 "page_number": row["page_number"],
-                "section_name": str(row["section_name"]),
-                "display_text": str(row["display_text"]),
+                "section_name": str(row["section_name"]) if row["section_name"] is not None else "",
+                "display_text": str(row["display_text"]) if row["display_text"] is not None else "",
                 "document_path": str(row["document_path"]),
                 "filename": str(row["filename"]),
                 "token_count": int(row["token_count"]),
@@ -247,21 +247,21 @@ def semantic_search_source_db(
         if score < effective_min_score:
             continue
         results.append(
-            SearchResult(
-                source_root_id=source_root_id,
-                source_path=source_path,
-                document_id=int(row["document_id"]),
-                content_unit_id=content_unit_id,
-                document_path=str(row["document_path"]),
-                filename=str(row["filename"]),
-                unit_type=str(row["unit_type"]),
-                page_number=int(row["page_number"]) if row["page_number"] is not None else None,
-                section_name=str(row["section_name"]),
-                display_text=str(row["display_text"]),
-                score=float(score),
-                image_mime=row["image_mime"],
-                image_data=row["image_data"],
-            )
+                SearchResult(
+                    source_root_id=source_root_id,
+                    source_path=source_path,
+                    document_id=int(row["document_id"]),
+                    content_unit_id=content_unit_id,
+                    document_path=str(row["document_path"]),
+                    filename=str(row["filename"]),
+                    unit_type=str(row["unit_type"]),
+                    page_number=int(row["page_number"]) if row["page_number"] is not None else None,
+                    section_name=str(row["section_name"]) if row["section_name"] is not None else "",
+                    display_text=str(row["display_text"]) if row["display_text"] is not None else "",
+                    score=float(score),
+                    image_mime=row["image_mime"],
+                    image_data=row["image_data"],
+                )
         )
     warning = None
     if stale_ids:
