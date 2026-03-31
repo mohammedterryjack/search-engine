@@ -3,7 +3,7 @@
 {% block body %}
 <header class="topbar">
   <a href="/" class="brand brand-small"><span class="brand-letter">s</span><span class="brand-letter">e</span><span class="brand-letter">a</span><span class="brand-letter">r</span><span class="brand-letter">C</span><span class="brand-letter">h</span><span class="brand-letter">i</span></a>
-  <form action="/search" method="get" class="search-form results-search-form">
+  <form action="/search" method="get" class="search-form results-search-form" data-search-form>
     <div class="search-bar-row">
       <div class="search-input-wrap">
         <input type="text" name="q" value="{{ query }}" class="search-input" autocomplete="off" autofocus>
@@ -69,52 +69,56 @@
     {% if document_scope_title %}
     <div class="results-meta">{{ document_scope_title }}</div>
     {% endif %}
-    {% if search_error %}
-    <div class="form-error">{{ search_error }}</div>
-    {% endif %}
-    {% if search_warning %}
-    <div class="form-success">{{ search_warning }}</div>
-    {% endif %}
-    {% if results_meta_label %}
-    <div class="results-meta">{{ results_meta_label }}</div>
-    {% elif query %}
-    <div class="results-meta">{{ results|length }} results</div>
-    {% endif %}
-    {% for result in results %}
-    <article class="result-card">
-      <div class="result-path">{{ result.document_path }}</div>
-      <h2 class="result-title">
-        <a href="/open/{{ result.source_root_id }}/{{ result.content_unit_id }}">
-          {% if result.unit_type == "section" %}
-          {{ result.section_name or result.filename }}
-          {% else %}
-          {{ result.unit_type|capitalize }} · {{ result.section_name or result.filename }}
-          {% endif %}
-        </a>
-      </h2>
-      <div class="result-subtitle">
-        <span>{{ result.unit_type }}</span>
-        {% if result.page_number %}
-        <span>Page {{ result.page_number }}</span>
-        {% endif %}
-      </div>
-      <p class="result-snippet">{{ result.display_text|truncate_text|highlight_terms(query)|safe }}</p>
-      {% if result.image_data %}
-      <div class="result-figure">
-        <img
-          src="data:{{ result.image_mime or 'image/png' }};base64,{{ result.image_data }}"
-          alt="{{ (result.section_name or result.filename)|e }}"
-          loading="lazy"
-          decoding="async"
-        >
-      </div>
+    <div data-results-error class="form-error">
+      {% if search_error %}{{ search_error }}{% endif %}
+    </div>
+    <div data-results-warning class="form-success">
+      {% if search_warning %}{{ search_warning }}{% endif %}
+    </div>
+    <div class="results-meta" data-results-meta>
+      {% if results_meta_label %}
+      {{ results_meta_label }}
+      {% elif query %}
+      {{ results|length }} results
       {% endif %}
-    </article>
-    {% else %}
-    {% if query %}
-    <p class="empty-state">No indexed sections matched that query yet.</p>
-    {% endif %}
-    {% endfor %}
+    </div>
+    <div data-search-results>
+      {% for result in results %}
+      <article class="result-card">
+        <div class="result-path">{{ result.document_path }}</div>
+        <h2 class="result-title">
+          <a href="/open/{{ result.source_root_id }}/{{ result.content_unit_id }}">
+            {% if result.unit_type == "section" %}
+            {{ result.section_name or result.filename }}
+            {% else %}
+            {{ result.unit_type|capitalize }} · {{ result.section_name or result.filename }}
+            {% endif %}
+          </a>
+        </h2>
+        <div class="result-subtitle">
+          <span>{{ result.unit_type }}</span>
+          {% if result.page_number %}
+          <span>Page {{ result.page_number }}</span>
+          {% endif %}
+        </div>
+        <p class="result-snippet">{{ result.highlighted_text|safe }}</p>
+        {% if result.image_data %}
+        <div class="result-figure">
+          <img
+            src="data:{{ result.image_mime or 'image/png' }};base64,{{ result.image_data }}"
+            alt="{{ (result.section_name or result.filename)|e }}"
+            loading="lazy"
+            decoding="async"
+          >
+        </div>
+        {% endif %}
+      </article>
+      {% else %}
+      {% if query %}
+      <p class="empty-state">No indexed sections matched that query yet.</p>
+      {% endif %}
+      {% endfor %}
+    </div>
   </section>
 </main>
 <script>
@@ -130,4 +134,5 @@
     });
   })();
 </script>
+<script type="module" src="{{ url_for('static', path='/js/search-page.js') }}"></script>
 {% endblock %}

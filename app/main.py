@@ -41,6 +41,7 @@ templates.env.filters["truncate_text"] = truncate_text
 
 ALLOWED_UNIT_TYPES = ("section", "figure", "table")
 ALLOWED_UNIT_TYPE_SET = set(ALLOWED_UNIT_TYPES)
+SNIPPET_CHAR_LIMIT = 320
 
 
 @dataclass(slots=True)
@@ -99,6 +100,7 @@ def _execute_search(query: str, filters: SearchFilters) -> tuple[SearchResponse,
             unit_types=filters.unit_types,
             vector_min_score=filters.vector_min_score,
         )
+        _apply_highlights(response.results, query)
         return response, None
     except SearchPipelineError as exc:
         return SearchResponse(results=[]), str(exc)
@@ -110,6 +112,14 @@ def _serialize_search_results(results: list[SearchResult]) -> list[dict[str, obj
 
 def _order_unit_types(values: set[str]) -> list[str]:
     return [value for value in ALLOWED_UNIT_TYPES if value in values]
+
+
+def _apply_highlights(results: list[SearchResult], query: str) -> None:
+    if not results:
+        return
+    for result in results:
+        snippet = truncate_text(result.display_text or "", SNIPPET_CHAR_LIMIT)
+        result.highlighted_text = highlight_terms(snippet, query)
 
 
 def format_bytes(size: int) -> str:

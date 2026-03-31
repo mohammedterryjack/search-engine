@@ -18,6 +18,7 @@ class SearchResult:
     score: float
     image_mime: str | None = None
     image_data: str | None = None
+    highlighted_text: str | None = None
 
 
 @dataclass(slots=True)
