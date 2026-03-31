@@ -647,8 +647,8 @@ mark {
   color: #1f6b3b;
   font-size: 0.95rem;
 }
-.form-error:empty,
-.form-success:empty {
+.form-error[data-visible="false"],
+.form-success[data-visible="false"] {
   display: none;
 }
 

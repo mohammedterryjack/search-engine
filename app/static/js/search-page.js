@@ -82,9 +82,11 @@
   const renderMessages = (error, warning) => {
     if (errorElement) {
       errorElement.textContent = error || '';
+      errorElement.dataset.visible = error ? 'true' : 'false';
     }
     if (warningElement) {
       warningElement.textContent = warning || '';
+      warningElement.dataset.visible = warning ? 'true' : 'false';
     }
   };
 
