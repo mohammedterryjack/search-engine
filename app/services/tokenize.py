@@ -5,32 +5,12 @@ from collections import Counter
 
 from simplemma import lemmatize
 
+from app.services.stopwords import STOP_WORDS
+
 
 TOKEN_RE = re.compile(r"[a-z0-9]+", re.IGNORECASE)
 IRREGULAR_NORMALIZATIONS = {
     "ran": "run",
-}
-STOP_WORDS = {
-    "a",
-    "an",
-    "and",
-    "are",
-    "as",
-    "at",
-    "be",
-    "by",
-    "for",
-    "from",
-    "in",
-    "is",
-    "it",
-    "of",
-    "on",
-    "or",
-    "that",
-    "the",
-    "to",
-    "with",
 }
 
 

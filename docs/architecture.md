@@ -217,7 +217,7 @@ Implemented:
 - regex tokenization
 - lowercase normalization
 - lemmatization
-- stop-word removal
+- stop-word removal using the stopwords-iso English list (plus a handful of common contractions), which is now centralized in `app.services.stopwords`. To refresh an existing index after you change the stop words, run `python scripts/prune_stopwords.py` before restart.
 
 Not implemented:
 
