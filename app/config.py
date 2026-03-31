@@ -16,6 +16,7 @@ class Settings:
     enable_vector_retrieval: bool
     vector_min_score_default: float
     reranker_url: str
+    reranker_timeout: float
     status_token: str
     enable_reranker: bool
     poll_seconds: float
@@ -43,6 +44,7 @@ def get_settings() -> Settings:
     enable_vector_retrieval = os.getenv("SEARCHY_ENABLE_VECTOR_RETRIEVAL", "1") == "1"
     vector_min_score_default = float(os.getenv("SEARCHY_VECTOR_MIN_SCORE_DEFAULT", "0.2"))
     reranker_url = os.getenv("SEARCHY_RERANKER_URL", "http://localhost:8010")
+    reranker_timeout = float(os.getenv("SEARCHY_RERANKER_TIMEOUT", "5"))
     status_token = os.getenv("SEARCHY_STATUS_TOKEN", "searchi-local-status")
     enable_reranker = os.getenv("SEARCHY_ENABLE_RERANKER", "1") == "1"
     poll_seconds = float(os.getenv("SEARCHY_POLL_SECONDS", "3"))
@@ -56,6 +58,7 @@ def get_settings() -> Settings:
         enable_vector_retrieval=enable_vector_retrieval,
         vector_min_score_default=vector_min_score_default,
         reranker_url=reranker_url,
+        reranker_timeout=reranker_timeout,
         status_token=status_token,
         enable_reranker=enable_reranker,
         poll_seconds=poll_seconds,

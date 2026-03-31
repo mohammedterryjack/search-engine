@@ -352,7 +352,8 @@ def rerank_results(query: str, results: list[SearchResult]) -> tuple[list[Search
             method="POST",
             headers={"Content-Type": "application/json; charset=utf-8"},
         )
-        with urllib.request.urlopen(request, timeout=2) as response:
+        settings = get_settings()
+        with urllib.request.urlopen(request, timeout=settings.reranker_timeout) as response:
             body = response.read().decode("utf-8")
         scores = json.loads(body)
         by_id = {int(item["content_unit_id"]): float(item["score"]) for item in scores}
