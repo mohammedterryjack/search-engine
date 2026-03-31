@@ -69,12 +69,8 @@
     {% if document_scope_title %}
     <div class="results-meta">{{ document_scope_title }}</div>
     {% endif %}
-    <div data-results-error class="form-error">
-      {% if search_error %}{{ search_error }}{% endif %}
-    </div>
-    <div data-results-warning class="form-success">
-      {% if search_warning %}{{ search_warning }}{% endif %}
-    </div>
+    <div data-results-error class="form-error">{% if search_error %}{{ search_error }}{% endif %}</div>
+    <div data-results-warning class="form-success">{% if search_warning %}{{ search_warning }}{% endif %}</div>
     <div class="results-meta" data-results-meta>
       {% if results_meta_label %}
       {{ results_meta_label }}

@@ -647,6 +647,10 @@ mark {
   color: #1f6b3b;
   font-size: 0.95rem;
 }
+.form-error:empty,
+.form-success:empty {
+  display: none;
+}
 
 .source-input-row {
   display: flex;
