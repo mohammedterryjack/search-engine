@@ -28,7 +28,6 @@ This document reflects the current `SearChi` architecture as implemented, includ
                         | source_roots     |   | lexical retrieval    |
                         | ingestion_jobs   |   | vector retrieval     |
                         +--------+---------+   | fuse -> rerank       |
-                                 |             | summarize            |
                                  |             +----+------^-------+
                                  |                  |      |
                                  v                  v      |
@@ -88,7 +87,7 @@ Create one ingestion job per document
 Worker polls next pending job
                     |
                     v
-                Docling parses document
+                Docling parses document (converter cached)
                 (PDF pipeline now generates embedded picture images)
                     |
                     v
@@ -105,7 +104,7 @@ with lowercase + lemmatization + stop-word removal
 Write documents / content_units / term_postings
     |
     v
-Compute embeddings for content units
+Compute embeddings for content units (model cached)
     |
     v
 Rebuild per-source FAISS index
@@ -151,13 +150,13 @@ Send candidates to reranker service
 Cross-encoder scores query/passage pairs
     |
     v
-Summarize top N ranked results (if enabled)
+Return final ranked results
     |
     v
-Return final ranked results (and summary)
+User can optionally click ✨ on any result to summarize it
     |
     v
-Click result
+Click result to view document
     |
     v
 /open/... -> /documents/...
@@ -206,11 +205,11 @@ Purpose:
 
 ## Runtime Location
 
-Default local runtime state is intended to live under:
+Default local runtime state lives under:
 
 - `~/.searchi/`
 
-Docker Compose mounts that same `~/.searchi/` directory into every service, so runtime state never travels into `./data/` (which can now be removed once Compose is stopped).
+Docker Compose mounts that same `~/.searchi/` directory into every service, so all runtime state is stored in the home directory rather than the project directory.
 
 ## Current Retrieval Semantics
 
@@ -221,7 +220,7 @@ Implemented:
 - regex tokenization
 - lowercase normalization
 - lemmatization
-- stop-word removal using the stopwords-iso English list (plus a handful of common contractions), which is now centralized in `app.services.stopwords`. To refresh an existing index after you change the stop words, run `python scripts/prune_stopwords.py` before restart.
+- stop-word removal using the stopwords-iso English list (plus a handful of common contractions), which is now centralized in `app.services.stopwords`
 
 Not implemented:
 
@@ -262,22 +261,25 @@ Behavior:
 
 Implemented:
 
-- LLM-based summarization service
+- LLM-based per-result summarization service
 - current default model:
-  - `qwen2.5:0.5b-instruct` (via Ollama)
-- input: top N search results (`display_text` snippets)
-- output: 2-3 bullet points with numeric citations `[1], [2], ...`
+  - `qwen2.5:0.5b-instruct` (via Ollama, auto-downloaded on first startup)
+- clicking the ✨ icon on any result card generates a single-sentence summary of that specific result
+- input: individual result `display_text`
+- output: single sentence summary
 
 Behavior:
 
 - summarizer failures are handled gracefully (summary is omitted)
-- configurable context depth (N) via UI advanced settings
+- summaries appear inline below the result snippet
+- summaries are generated on-demand (not pre-computed)
 
 ## Current Extraction Semantics
 
 Implemented:
 
 - Docling is required for ingestion
+- Docling converter is cached per worker process (loaded once, reused across all documents)
 - no silent file-text fallback
 - extraction attempts separate `section`, `figure`, and `table` rows
 - page numbers are taken from Docling provenance when available
@@ -325,10 +327,20 @@ So bounding-box overlays are technically feasible enough to stay on the roadmap,
 ### Results view
 
 - source filters
-- result cards
-- highlighted snippets
+- result cards with:
+  - highlighted snippets (click to expand/collapse full text with scrolling)
+  - ✨ summarize icon in top-right corner for per-result AI summarization
+  - inline summary display when icon is clicked
 - explicit reranker/search errors when they occur
-- AI-generated summary box above results
+
+## Performance Optimizations
+
+Model caching:
+
+- Docling `DocumentConverter` is cached with `@lru_cache` (loaded once per worker process)
+- Sentence transformer embedding model is cached with `@lru_cache` (loaded once per service)
+- RapidOCR models are loaded once when the Docling converter initializes
+- This means weights are loaded only at worker startup, not per-document
 
 ## Current Known Gaps
 

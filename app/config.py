@@ -23,7 +23,6 @@ class Settings:
     enable_summarizer: bool
     summarizer_url: str
     summarizer_model: str
-    summarizer_top_n_default: int
     summarizer_timeout: float
 
 
@@ -49,14 +48,13 @@ def get_settings() -> Settings:
     enable_vector_retrieval = os.getenv("SEARCHY_ENABLE_VECTOR_RETRIEVAL", "1") == "1"
     vector_min_score_default = float(os.getenv("SEARCHY_VECTOR_MIN_SCORE_DEFAULT", "0.2"))
     reranker_url = os.getenv("SEARCHY_RERANKER_URL", "http://localhost:8010")
-    reranker_timeout = float(os.getenv("SEARCHY_RERANKER_TIMEOUT", "5"))
+    reranker_timeout = float(os.getenv("SEARCHY_RERANKER_TIMEOUT", "15"))
     status_token = os.getenv("SEARCHY_STATUS_TOKEN", "searchi-local-status")
     enable_reranker = os.getenv("SEARCHY_ENABLE_RERANKER", "1") == "1"
     poll_seconds = float(os.getenv("SEARCHY_POLL_SECONDS", "3"))
     enable_summarizer = os.getenv("SEARCHY_ENABLE_SUMMARIZER", "1") == "1"
     summarizer_url = os.getenv("SEARCHY_SUMMARIZER_URL", "http://localhost:11434")
     summarizer_model = os.getenv("SEARCHY_SUMMARIZER_MODEL", "qwen2.5:0.5b-instruct")
-    summarizer_top_n_default = int(os.getenv("SEARCHY_SUMMARIZER_TOP_N_DEFAULT", "5"))
     summarizer_timeout = float(os.getenv("SEARCHY_SUMMARIZER_TIMEOUT", "180.0"))
 
     return Settings(
@@ -75,6 +73,5 @@ def get_settings() -> Settings:
         enable_summarizer=enable_summarizer,
         summarizer_url=summarizer_url,
         summarizer_model=summarizer_model,
-        summarizer_top_n_default=summarizer_top_n_default,
         summarizer_timeout=summarizer_timeout,
     )

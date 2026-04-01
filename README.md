@@ -7,6 +7,7 @@ SearChi is a local document search engine with:
 - one SQLite database per whitelisted source path
 - async ingestion worker
 - multi-stage ranking pipeline
+- per-result AI summarization (✨ button on each result)
 
 ## Services
 
@@ -24,15 +25,7 @@ With the default local configuration, runtime data lives under `~/.searchi/`.
 
 The Docker Compose setup also points at the host `~/.searchi/` directory via a bind mount (so nothing is written to `./data/` anymore).
 
-### Refreshing the term index after stop-word changes
-
-The stop-word list now includes a much larger set of tokens, so you should rerun ingestion or prune the existing index before relying on the new behavior. Use the helper script before restarting the app:
-
-```bash
-python scripts/prune_stopwords.py
-```
-
-That deletes all postings whose term appears in the expanded stop-word set; new ingests will naturally skip them going forward.
+**Note:** On first startup, the summariser service will automatically download the `qwen2.5:0.5b-instruct` model (~300MB). This may take a minute or two depending on your connection speed.
 
 ## HTTP API
 

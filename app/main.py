@@ -62,14 +62,12 @@ class SearchFilters:
     source_ids: set[int]
     unit_types: set[str]
     vector_min_score: float
-    summarizer_top_n: int
 
 
 class SearchApiFilters(BaseModel):
     source_ids: list[int]
     unit_types: list[str]
     vector_min_score: float
-    summarizer_top_n: int
 
 
 class SearchApiRequest(BaseModel):
@@ -77,7 +75,6 @@ class SearchApiRequest(BaseModel):
     source: list[int] = Field(default_factory=list)
     unit_type: list[str] = Field(default_factory=list)
     vector_min_score: float | None = None
-    summarizer_top_n: int | None = None
 
 
 
@@ -86,17 +83,6 @@ class SearchApiResponse(BaseModel):
     warning: str | None = None
     error: str | None = None
     filters: SearchApiFilters
-
-
-class SummarizeApiRequest(BaseModel):
-    q: str
-    results: list[dict[str, object]]
-    summarizer_top_n: int
-
-
-class SummarizeApiResponse(BaseModel):
-    summary: str | None = None
-    error: str | None = None
 
 
 def _normalize_unit_types(values: list[str] | None) -> set[str]:
@@ -108,16 +94,12 @@ def _build_search_filters(
     source: list[int] | None,
     unit_type: list[str] | None,
     vector_min_score: float | None,
-    summarizer_top_n: int | None = None,
 ) -> SearchFilters:
     return SearchFilters(
         source_ids=set(source or []),
         unit_types=_normalize_unit_types(unit_type),
         vector_min_score=(
             vector_min_score if vector_min_score is not None else settings.vector_min_score_default
-        ),
-        summarizer_top_n=(
-            summarizer_top_n if summarizer_top_n is not None else settings.summarizer_top_n_default
         ),
     )
 
@@ -131,7 +113,6 @@ def _execute_search(query: str, filters: SearchFilters) -> tuple[SearchResponse,
             source_root_ids=filters.source_ids if filters.source_ids else None,
             unit_types=filters.unit_types,
             vector_min_score=filters.vector_min_score,
-            summarizer_top_n=filters.summarizer_top_n,
         )
         _apply_highlights(response.results, query)
         return response, None
@@ -315,7 +296,6 @@ async def home(request: Request) -> HTMLResponse:
             "document_count": document_count,
             "jobs": store.list_jobs()[:10],
             "default_vector_min_score": settings.vector_min_score_default,
-            "default_summarizer_top_n": settings.summarizer_top_n_default,
             "all_unit_types": ["section", "figure", "table"],
         },
     )
@@ -328,9 +308,8 @@ async def search(
     source: list[int] | None = None,
     unit_type: list[str] | None = None,
     vector_min_score: float | None = None,
-    summarizer_top_n: int | None = None,
 ) -> HTMLResponse:
-    filters = _build_search_filters(source, unit_type, vector_min_score, summarizer_top_n)
+    filters = _build_search_filters(source, unit_type, vector_min_score)
     search_response, search_error = _execute_search(q, filters)
     search_warning = search_response.warning
     results = search_response.results
@@ -341,8 +320,6 @@ async def search(
         {
             "query": q,
             "results": results,
-            "summary": None,
-            "summarizer_top_n": filters.summarizer_top_n,
             "sources": store.list_source_roots(),
             "selected_sources": filters.source_ids,
             "selected_unit_types": filters.unit_types,
@@ -359,10 +336,9 @@ async def search(
 @app.post("/api/search", response_model=SearchApiResponse)
 async def api_search(payload: SearchApiRequest) -> SearchApiResponse:
     filters = _build_search_filters(
-        payload.source, 
-        payload.unit_type, 
-        payload.vector_min_score, 
-        payload.summarizer_top_n
+        payload.source,
+        payload.unit_type,
+        payload.vector_min_score
     )
     search_response, search_error = _execute_search(payload.q, filters)
     return SearchApiResponse(
@@ -373,36 +349,21 @@ async def api_search(payload: SearchApiRequest) -> SearchApiResponse:
             source_ids=sorted(filters.source_ids),
             unit_types=_order_unit_types(filters.unit_types),
             vector_min_score=filters.vector_min_score,
-            summarizer_top_n=filters.summarizer_top_n,
         ),
     )
 
 
-@app.post("/api/summarize")
-async def api_summarize(payload: SummarizeApiRequest):
-    from app.services.summarize import summarize_results_stream
-    from app.models import SearchResult
+class SummarizeSingleRequest(BaseModel):
+    text: str
+
+
+@app.post("/api/summarize-single")
+async def api_summarize_single(payload: SummarizeSingleRequest):
+    from app.services.summarize import summarize_single_result_stream
     from fastapi.responses import StreamingResponse
 
-    results = [
-        SearchResult(
-            source_root_id=int(res.get("source_root_id", 0)),
-            source_path=str(res.get("source_path", "")),
-            document_id=int(res.get("document_id", 0)),
-            content_unit_id=int(res.get("content_unit_id", 0)),
-            document_path=str(res.get("document_path", "")),
-            filename=str(res.get("filename", "")),
-            unit_type=str(res.get("unit_type", "section")),
-            page_number=res.get("page_number") if res.get("page_number") is not None else None, # type: ignore
-            section_name=str(res.get("section_name", "")),
-            display_text=str(res.get("display_text", "")),
-            score=float(res.get("score", 0.0)),
-        )
-        for res in payload.results
-    ]
-
     return StreamingResponse(
-        summarize_results_stream(payload.q, results, payload.summarizer_top_n),
+        summarize_single_result_stream(payload.text),
         media_type="text/event-stream"
     )
 
@@ -557,8 +518,6 @@ async def document_results_view(request: Request, source_root_id: int, document_
         {
             "query": "",
             "results": results,
-            "summary": None,
-            "summarizer_top_n": settings.summarizer_top_n_default,
             "sources": store.list_source_roots(),
             "selected_sources": {source_root_id},
             "selected_unit_types": {"section", "figure", "table"},

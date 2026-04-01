@@ -488,11 +488,70 @@ a:hover {
   box-shadow: var(--shadow);
   backdrop-filter: blur(10px);
   transition: transform 150ms ease, box-shadow 150ms ease;
+  position: relative;
 }
 
 .result-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 14px 30px rgba(32, 33, 36, 0.12);
+}
+
+.result-summary-container {
+  margin-top: 0.5rem;
+  background: rgba(255, 235, 153, 0.3);
+  border: 1px solid rgba(255, 215, 0, 0.4);
+  border-radius: 12px;
+  position: relative;
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  transition: all 0.3s ease;
+  padding: 0.25rem;
+}
+
+.result-summary-container.expanded {
+  display: flex;
+  padding: 0.5rem 0.75rem;
+}
+
+.result-summarize-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 150ms ease;
+  padding: 0;
+  font-size: 1.5rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.result-summarize-btn:hover {
+  transform: scale(1.2);
+}
+
+.result-summarize-btn:active {
+  transform: scale(0.95);
+}
+
+.result-summary-content {
+  color: var(--text);
+  font-size: 0.95rem;
+  line-height: 1.55;
+  flex: 1;
+  padding-top: 0.2rem;
+}
+
+.summary-loading {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.summary-error {
+  color: var(--danger);
+  font-style: italic;
 }
 
 .result-path {
@@ -520,6 +579,42 @@ a:hover {
   margin: 0;
   color: var(--text);
   line-height: 1.55;
+  cursor: pointer;
+  position: relative;
+  max-height: 4.65em;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  padding: 4px;
+  margin: -4px;
+  border-radius: 6px;
+}
+
+.result-snippet:not(.expanded)::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1.2em;
+  background: linear-gradient(to bottom, transparent, rgba(255, 255, 255, 0.9));
+  pointer-events: none;
+}
+
+.result-snippet.expanded {
+  max-height: 400px;
+  overflow-y: auto;
+  cursor: default;
+  background: rgba(248, 249, 250, 0.5);
+  padding: 8px;
+  margin: -8px;
+}
+
+.result-snippet.expanded::after {
+  display: none;
+}
+
+.result-snippet:not(.expanded):hover {
+  background: rgba(108, 122, 223, 0.05);
 }
 
 .result-figure {

@@ -3,40 +3,16 @@ from __future__ import annotations
 import json
 import urllib.error
 import urllib.request
-from typing import TYPE_CHECKING
 
 from app.config import get_settings
 
-if TYPE_CHECKING:
-    from app.models import SearchResult
 
-
-def summarize_results_stream(query: str, results: list[SearchResult], top_n: int):
+def summarize_single_result_stream(text: str):
     settings = get_settings()
-    if not settings.enable_summarizer or not results:
+    if not settings.enable_summarizer or not text:
         return
 
-    relevant_results = results[:top_n]
-    context_parts = []
-    for i, res in enumerate(relevant_results, start=1):
-        text = (res.display_text or "").strip()
-        if text:
-            context_parts.append(f"[{i}] {text}")
-    
-    if not context_parts:
-        return
-
-    context_str = "\n".join(context_parts)
-    prompt = f"""Using the search results provided below, write a single, natural-sounding paragraph that synthesizes the information to answer the query: '{query}'. 
-
-Follow these strict rules:
-1. Provide a cohesive summary, NOT a list of quotes.
-2. Use inline citations in the format [N] immediately following the information sourced from result N.
-3. Keep the entire response to exactly one paragraph.
-4. Respond ONLY with the summary.
-
-SEARCH RESULTS:
-{context_str}"""
+    prompt = f"Summarise the following text in plain english using 10 words or less.\n\nText: {text}\n\nSummary:"
 
     payload = {
         "model": settings.summarizer_model,
