@@ -58,6 +58,25 @@
               </div>
               <div class="advanced-help">0.00 keeps all semantic hits. Higher values filter out weaker semantic matches.</div>
             </div>
+            <div class="advanced-group advanced-group-wide">
+              <label class="advanced-label" for="summarizer_top_n_results">Summarizer context depth</label>
+              <input
+                id="summarizer_top_n_results"
+                name="summarizer_top_n"
+                type="range"
+                min="1"
+                max="10"
+                step="1"
+                value="{{ summarizer_top_n }}"
+                class="threshold-slider"
+                data-threshold-output="summarizer_top_n_results_value"
+              >
+              <div class="slider-legend">
+                <strong id="summarizer_top_n_results_value">{{ summarizer_top_n }}</strong>
+                <span>Results</span>
+              </div>
+              <div class="advanced-help">Number of top results to feed the AI summarizer.</div>
+            </div>
           </div>
         </div>
       </details>
@@ -71,6 +90,16 @@
     {% endif %}
     <div data-results-error class="form-error" data-visible="{{ 'true' if search_error else 'false' }}">{% if search_error %}{{ search_error }}{% endif %}</div>
     <div data-results-warning class="form-success" data-visible="{{ 'true' if search_warning else 'false' }}">{% if search_warning %}{{ search_warning }}{% endif %}</div>
+    
+    <article class="summary-box" data-summary-box data-visible="false">
+      <div class="summary-header">
+        <span class="ai-badge">AI Summary</span>
+      </div>
+      <div class="summary-content" data-summary-content>
+        <button type="button" class="primary-button summarize-btn" data-summarize-button>Summarize with AI</button>
+      </div>
+    </article>
+
     <div class="results-meta" data-results-meta>
       {% if results_meta_label %}
       {{ results_meta_label }}

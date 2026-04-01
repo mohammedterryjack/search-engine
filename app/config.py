@@ -20,6 +20,11 @@ class Settings:
     status_token: str
     enable_reranker: bool
     poll_seconds: float
+    enable_summarizer: bool
+    summarizer_url: str
+    summarizer_model: str
+    summarizer_top_n_default: int
+    summarizer_timeout: float
 
 
 def default_data_dir() -> Path:
@@ -48,6 +53,11 @@ def get_settings() -> Settings:
     status_token = os.getenv("SEARCHY_STATUS_TOKEN", "searchi-local-status")
     enable_reranker = os.getenv("SEARCHY_ENABLE_RERANKER", "1") == "1"
     poll_seconds = float(os.getenv("SEARCHY_POLL_SECONDS", "3"))
+    enable_summarizer = os.getenv("SEARCHY_ENABLE_SUMMARIZER", "1") == "1"
+    summarizer_url = os.getenv("SEARCHY_SUMMARIZER_URL", "http://localhost:11434")
+    summarizer_model = os.getenv("SEARCHY_SUMMARIZER_MODEL", "qwen2.5:0.5b-instruct")
+    summarizer_top_n_default = int(os.getenv("SEARCHY_SUMMARIZER_TOP_N_DEFAULT", "5"))
+    summarizer_timeout = float(os.getenv("SEARCHY_SUMMARIZER_TIMEOUT", "180.0"))
 
     return Settings(
         data_dir=data_dir,
@@ -62,4 +72,9 @@ def get_settings() -> Settings:
         status_token=status_token,
         enable_reranker=enable_reranker,
         poll_seconds=poll_seconds,
+        enable_summarizer=enable_summarizer,
+        summarizer_url=summarizer_url,
+        summarizer_model=summarizer_model,
+        summarizer_top_n_default=summarizer_top_n_default,
+        summarizer_timeout=summarizer_timeout,
     )

@@ -18,12 +18,15 @@ services:
       SEARCHY_RERANKER_URL: http://reranker:8010
       SEARCHY_STATUS_TOKEN: searchi-local-status
       SEARCHY_ENABLE_RERANKER: "1"
+      SEARCHY_SUMMARIZER_URL: http://summariser:11434
     depends_on:
       - reranker
+      - summariser
 
   worker:
     build: .
     command: python -m app.worker.runner
+    restart: on-failure
     volumes:
       - .:/app
       - ${HOME}/.searchi:/searchi_data
@@ -37,6 +40,14 @@ services:
       SEARCHY_ENABLE_VECTOR_RETRIEVAL: "1"
       SEARCHY_STATUS_TOKEN: searchi-local-status
       SEARCHY_POLL_SECONDS: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+        reservations:
+          memory: 2G
+    depends_on:
+      - summariser
 
   reranker:
     build: .
@@ -49,3 +60,10 @@ services:
       SEARCHY_STATUS_TOKEN: searchi-local-status
       SEARCHY_RERANKER_MODEL: cross-encoder/ms-marco-MiniLM-L4-v2
       SEARCHY_RERANKER_BATCH_SIZE: "16"
+
+  summariser:
+    image: ollama/ollama:latest
+    ports:
+      - "11435:11434"
+    volumes:
+      - ${HOME}/.searchi/ollama:/root/.ollama

@@ -833,3 +833,54 @@ mark {
     width: min(65vw, 240px);
   }
 }
+
+.summary-box[data-visible="false"] {
+  display: none;
+}
+
+.summary-loading {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.summary-box::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: var(--accent);
+  opacity: 0.6;
+}
+
+.summary-header {
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.ai-badge {
+  background: var(--accent);
+  color: white;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  letter-spacing: 0.04em;
+  box-shadow: 0 2px 8px rgba(108, 122, 223, 0.3);
+}
+
+.summary-content {
+  color: var(--text);
+  line-height: 1.65;
+  font-size: 1.05rem;
+}
+
+.summary-content br {
+  margin-bottom: 0.5rem;
+  display: block;
+  content: "";
+}

@@ -60,6 +60,25 @@
                 </div>
                 <div class="advanced-help">0.00 keeps all semantic hits. Higher values filter out weaker semantic matches.</div>
               </div>
+              <div class="advanced-group advanced-group-wide">
+                <label class="advanced-label" for="summarizer_top_n_home">Summarizer context depth</label>
+                <input
+                  id="summarizer_top_n_home"
+                  name="summarizer_top_n"
+                  type="range"
+                  min="1"
+                  max="10"
+                  step="1"
+                  value="{{ default_summarizer_top_n }}"
+                  class="threshold-slider"
+                  data-threshold-output="summarizer_top_n_home_value"
+                >
+                <div class="slider-legend">
+                  <strong id="summarizer_top_n_home_value">{{ default_summarizer_top_n }}</strong>
+                  <span>Results</span>
+                </div>
+                <div class="advanced-help">Number of top results to feed the AI summarizer.</div>
+              </div>
             </div>
           </div>
         </details>

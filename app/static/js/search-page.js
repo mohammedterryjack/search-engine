@@ -8,7 +8,10 @@
   const metaElement = document.querySelector('[data-results-meta]');
   const errorElement = document.querySelector('[data-results-error]');
   const warningElement = document.querySelector('[data-results-warning]');
+  const summaryBox = document.querySelector('[data-summary-box]');
+  const summaryContent = document.querySelector('[data-summary-content]');
   const endpoint = '/api/search';
+  const summarizeEndpoint = '/api/summarize';
 
   const escapeHtml = (value = '') => {
     const div = document.createElement('div');
@@ -16,7 +19,54 @@
     return div.innerHTML;
   };
 
+  const nl2br = (value = '') => {
+    return escapeHtml(value).replace(/\n/g, '<br>\n');
+  };
+
   const capitalize = (value = '') => (value ? `${value.charAt(0).toUpperCase()}${value.slice(1)}` : '');
+
+  const showSummaryLoading = () => {
+    if (!summaryBox || !summaryContent) return;
+    summaryContent.innerHTML = '<span class="summary-loading">Generating summary...</span>';
+    summaryBox.dataset.visible = 'true';
+  };
+
+  const fetchSummary = async (query, results, topN) => {
+    if (!query || !results.length || !topN) {
+      if (summaryBox) summaryBox.dataset.visible = 'false';
+      return;
+    }
+    showSummaryLoading();
+    try {
+      const response = await fetch(summarizeEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ q: query, results, summarizer_top_n: topN }),
+      });
+      
+      if (!response.ok) {
+        if (summaryBox) summaryBox.dataset.visible = 'false';
+        return;
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let summary = '';
+      
+      summaryContent.innerHTML = ''; // Clear loading message
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        summary += chunk;
+        summaryContent.innerHTML = nl2br(summary);
+      }
+    } catch (err) {
+      console.error('Summary fetch failed', err);
+      if (summaryBox) summaryBox.dataset.visible = 'false';
+    }
+  };
 
   const renderResultCard = (result) => {
     const sectionLabel = result.section_name || result.filename || '';
@@ -93,6 +143,7 @@
   const gatherPayload = () => {
     const queryInput = form.querySelector('[name="q"]');
     const slider = form.querySelector('[name="vector_min_score"]');
+    const topNSlider = form.querySelector('[name="summarizer_top_n"]');
     const selectedSources = Array.from(form.querySelectorAll('input[name="source"]:checked'))
       .map((input) => Number(input.value))
       .filter((value) => !Number.isNaN(value));
@@ -103,6 +154,7 @@
       source: selectedSources,
       unit_type: selectedUnits,
       vector_min_score: slider ? Number(slider.value) : undefined,
+      summarizer_top_n: topNSlider ? Number(topNSlider.value) : 5,
     };
   };
 
@@ -122,6 +174,11 @@
       params.set('vector_min_score', payload.vector_min_score.toFixed(2));
     } else {
       params.delete('vector_min_score');
+    }
+    if (typeof payload.summarizer_top_n === 'number') {
+      params.set('summarizer_top_n', String(payload.summarizer_top_n));
+    } else {
+      params.delete('summarizer_top_n');
     }
     const queryString = params.toString();
     window.history.replaceState({}, '', `${url.pathname}${queryString ? `?${queryString}` : ''}`);
@@ -148,10 +205,25 @@
       renderMeta(data.results.length, payload.q);
       renderResults(data.results, payload.q);
       updateUrl(payload);
+      
+      // Async fetch summary after results are shown
+      fetchSummary(payload.q, data.results, payload.summarizer_top_n);
     } catch (error) {
       renderMessages(error.message, null);
+      if (summaryBox) summaryBox.dataset.visible = 'false';
     }
   };
 
   form.addEventListener('submit', performSearch);
+
+  // Initial load check if results already exist from SSR
+  const initialPayload = gatherPayload();
+  if (initialPayload.q && resultsContainer && resultsContainer.children.length > 0) {
+    const initialResults = Array.from(resultsContainer.querySelectorAll('.result-card')).map((card) => {
+      return {
+          display_text: card.querySelector('.result-snippet').textContent,
+      };
+    });
+    fetchSummary(initialPayload.q, initialResults, initialPayload.summarizer_top_n);
+  }
 })();

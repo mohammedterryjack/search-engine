@@ -13,7 +13,7 @@ from app.db.source_store import SourceStore
 from app.models import SearchResponse, SearchResult
 from app.services.tokenize import normalized_terms
 from app.services.vector_store import query_faiss_index
-
+from app.services.summarize import summarize_results_stream
 
 class SearchPipelineError(RuntimeError):
     """Raised when an enabled search stage fails."""
@@ -48,6 +48,7 @@ def search_all_sources(
     *,
     unit_types: set[str] | None = None,
     vector_min_score: float | None = None,
+    summarizer_top_n: int | None = None,
 ) -> SearchResponse:
     terms = normalized_terms(query)
     if not terms:
@@ -82,7 +83,11 @@ def search_all_sources(
         reranked = [result for result in reranked if result.unit_type in unit_types]
     if rerank_warning:
         warnings.append(rerank_warning)
-    return SearchResponse(results=reranked, warning=" ".join(warnings) if warnings else None)
+    
+    return SearchResponse(
+        results=reranked, 
+        warning=" ".join(warnings) if warnings else None
+    )
 
 
 def search_source_db(

@@ -24,4 +24,5 @@ class SearchResult:
 @dataclass(slots=True)
 class SearchResponse:
     results: list[SearchResult]
+    summary: str | None = None
     warning: str | None = None

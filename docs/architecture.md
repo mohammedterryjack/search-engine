@@ -28,21 +28,22 @@ This document reflects the current `SearChi` architecture as implemented, includ
                         | source_roots     |   | lexical retrieval    |
                         | ingestion_jobs   |   | vector retrieval     |
                         +--------+---------+   | fuse -> rerank       |
-                                 |             +----+-----------------+
-                                 |                  |
-                                 v                  v
+                                 |             | summarize            |
+                                 |             +----+------^-------+
+                                 |                  |      |
+                                 v                  v      |
                         +------------------+   +----------------------+
                         | Async Worker     |   | Reranker Service     |
                         | Docling parse    |   | cross-encoder        |
                         | build units      |   | ms-marco MiniLM      |
-                        +--------+---------+   +----------------------+
-                                 |
-                                 v
-                     +----------------------------+
-                     | Per-Source SQLite DB       |
-                     | one DB per whitelist path  |
-                     |                            |
-                     | documents                  |
+                        +--------+---------+   +----------+-----------+
+                                 |                        |
+                                 v                        v
+                     +----------------------------+   +----------------------+
+                     | Per-Source SQLite DB       |   | Summarizer Service   |
+                     | one DB per whitelist path  |   | Ollama               |
+                     |                            |   | Qwen 0.5B Instruct   |
+                     | documents                  |   +----------------------+
                      | content_units              |
                      | term_postings              |
                      | content_embeddings         |
@@ -150,7 +151,10 @@ Send candidates to reranker service
 Cross-encoder scores query/passage pairs
     |
     v
-Return final ranked results
+Summarize top N ranked results (if enabled)
+    |
+    v
+Return final ranked results (and summary)
     |
     v
 Click result
@@ -254,6 +258,21 @@ Behavior:
 - reranker failures are surfaced explicitly
 - no silent fallback to BM25 when reranking is enabled
 
+### Summarization
+
+Implemented:
+
+- LLM-based summarization service
+- current default model:
+  - `qwen2.5:0.5b-instruct` (via Ollama)
+- input: top N search results (`display_text` snippets)
+- output: 2-3 bullet points with numeric citations `[1], [2], ...`
+
+Behavior:
+
+- summarizer failures are handled gracefully (summary is omitted)
+- configurable context depth (N) via UI advanced settings
+
 ## Current Extraction Semantics
 
 Implemented:
@@ -309,6 +328,7 @@ So bounding-box overlays are technically feasible enough to stay on the roadmap,
 - result cards
 - highlighted snippets
 - explicit reranker/search errors when they occur
+- AI-generated summary box above results
 
 ## Current Known Gaps
 
