@@ -85,6 +85,8 @@
       return;
     }
     resultsContainer.innerHTML = results.map(renderResultCard).join('');
+    attachSummarizeListeners();
+    attachSnippetListeners();
   };
 
   const renderMeta = (count, query) => {
@@ -268,13 +270,4 @@
 
   attachSummarizeListeners();
   attachSnippetListeners();
-
-  // Override renderResults to re-attach listeners after dynamic render
-  const originalRenderResults = renderResults;
-  const renderResultsWithListeners = (results, query) => {
-    originalRenderResults(results, query);
-    attachSummarizeListeners();
-    attachSnippetListeners();
-  };
-  renderResults = renderResultsWithListeners;
 })();
