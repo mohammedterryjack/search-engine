@@ -537,8 +537,9 @@ a:hover {
 }
 
 .result-summary-content {
-  color: var(--text);
-  font-size: 0.95rem;
+  color: #a7a7a7;
+  font-size: 0.85rem; 
+  font-style: italic;  
   line-height: 1.55;
   flex: 1;
   padding-top: 0.2rem;
