@@ -209,21 +209,6 @@ class GlobalStore:
                 (utc_now(), job_id),
             )
 
-    def retry_failed_jobs(self, source_root_id: int) -> None:
-        with self.connect() as conn:
-            conn.execute(
-                """
-                UPDATE ingestion_jobs
-                SET status = 'pending',
-                    error_message = NULL,
-                    started_at = NULL,
-                    finished_at = NULL,
-                    created_at = ?
-                WHERE source_root_id = ? AND status = 'failed'
-                """,
-                (utc_now(), source_root_id),
-            )
-
     def recover_stale_jobs(self, stale_after_seconds: int = 900) -> int:
         """Reset jobs that have been running for too long (likely from crashed workers)."""
         with self.connect() as conn:

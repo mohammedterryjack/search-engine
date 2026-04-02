@@ -761,17 +761,6 @@ async def sync_source(source_root_id: int) -> RedirectResponse:
     return sources_redirect(success=success_message)
 
 
-@app.post("/sources/{source_root_id}/retry-failed")
-async def retry_failed_source_jobs(source_root_id: int) -> RedirectResponse:
-    store = GlobalStore()
-    source_root = store.get_source_root(source_root_id)
-    if source_root is None:
-        raise HTTPException(status_code=404, detail="Source not found")
-
-    store.retry_failed_jobs(source_root_id)
-    return sources_redirect(success="Failed jobs have been queued for retry.")
-
-
 @app.post("/jobs/{job_id}/retry")
 async def retry_job(job_id: int) -> RedirectResponse:
     store = GlobalStore()
