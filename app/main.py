@@ -488,34 +488,30 @@ async def status_view(request: Request) -> HTMLResponse:
 @app.get("/api/workers/{worker_name}/logs")
 async def worker_logs_stream(worker_name: str):
     """Stream worker logs via SSE."""
-    import subprocess
-
     async def log_stream():
         try:
-            # Find container name from worker name
-            result = subprocess.run(
-                ["docker", "ps", "--filter", f"name={worker_name}", "--format", "{{.Names}}"],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-            container_name = result.stdout.strip()
+            import docker
+            client = docker.from_env()
 
-            if not container_name:
-                yield f"data: Worker container not found\n\n"
+            # Find container by worker name
+            containers = client.containers.list(filters={"name": worker_name})
+            if not containers:
+                yield f"data: {json.dumps({'error': 'Worker container not found'})}\n\n"
                 return
 
-            # Stream logs
-            process = subprocess.Popen(
-                ["docker", "logs", "-f", "--tail", "100", container_name],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True
-            )
+            container = containers[0]
 
-            for line in process.stdout:
-                yield f"data: {json.dumps({'log': line.rstrip()})}\n\n"
-                await asyncio.sleep(0.01)
+            # Get last 100 lines
+            logs = container.logs(tail=100, stream=False).decode('utf-8')
+            for line in logs.splitlines():
+                yield f"data: {json.dumps({'log': line})}\n\n"
+                await asyncio.sleep(0.001)
+
+            # Stream new logs
+            for log_line in container.logs(stream=True, follow=True):
+                line = log_line.decode('utf-8').rstrip()
+                yield f"data: {json.dumps({'log': line})}\n\n"
+                await asyncio.sleep(0.001)
 
         except Exception as e:
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
