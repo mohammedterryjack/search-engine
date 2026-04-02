@@ -80,12 +80,15 @@ def build_docling_converter():
     try:
         from docling.pipeline.standard_pdf_pipeline import ThreadedPdfPipelineOptions
 
-        # Reduce images_scale from default 2.0 to 1.0 to reduce memory usage
-        # Default 2.0 quadruples image area causing OOM on large documents
-        # Reference: https://github.com/DS4SD/docling/issues/3216
+        # Memory optimization settings:
+        # - images_scale=1.0: Reduce from default 2.0 (Issue #3216)
+        # - generate_parsed_pages=False: Don't keep parsed pages in memory (Issue #2540)
+        # - generate_page_images=False: Skip page image generation to save memory
         pipeline_options = ThreadedPdfPipelineOptions(
             generate_picture_images=True,
             images_scale=1.0,
+            generate_parsed_pages=False,
+            generate_page_images=False,
         )
     except Exception:
         try:
@@ -94,6 +97,8 @@ def build_docling_converter():
             pipeline_options = PdfPipelineOptions(
                 generate_picture_images=True,
                 images_scale=1.0,
+                generate_parsed_pages=False,
+                generate_page_images=False,
             )
         except Exception:
             pipeline_options = None
