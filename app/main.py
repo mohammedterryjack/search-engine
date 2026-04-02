@@ -620,6 +620,41 @@ async def add_source(request: Request) -> RedirectResponse:
     return sources_redirect(success=success_message, source_path=display_source_path)
 
 
+@app.post("/sources/{source_root_id}/sync")
+async def sync_source(source_root_id: int) -> RedirectResponse:
+    store = GlobalStore()
+    source_root = store.get_source_root(source_root_id)
+    if source_root is None:
+        raise HTTPException(status_code=404, detail="Source not found")
+
+    source_path = Path(str(source_root["source_path"]))
+    source_store = SourceStore(Path(str(source_root["db_path"])))
+
+    supported_documents = list_supported_documents(source_path)
+    queued_count = 0
+    for document_path in supported_documents:
+        if not source_store.has_document(document_path):
+            store.enqueue_document(int(source_root["id"]), document_path)
+            queued_count += 1
+
+    if queued_count > 0:
+        success_message = f"Found {queued_count} new document(s) and queued for ingestion."
+    else:
+        success_message = "No new documents found."
+    return sources_redirect(success=success_message)
+
+
+@app.post("/sources/{source_root_id}/retry-failed")
+async def retry_failed_source_jobs(source_root_id: int) -> RedirectResponse:
+    store = GlobalStore()
+    source_root = store.get_source_root(source_root_id)
+    if source_root is None:
+        raise HTTPException(status_code=404, detail="Source not found")
+
+    store.retry_failed_jobs(source_root_id)
+    return sources_redirect(success="Failed jobs have been queued for retry.")
+
+
 @app.post("/sources/{source_root_id}/clear")
 async def clear_source(source_root_id: int) -> RedirectResponse:
     store = GlobalStore()

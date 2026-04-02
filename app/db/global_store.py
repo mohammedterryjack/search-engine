@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import sqlite3
 from contextlib import contextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Iterator
 
@@ -228,6 +228,21 @@ class GlobalStore:
                 """,
                 (utc_now(), source_root_id),
             )
+
+    def recover_stale_jobs(self, stale_after_seconds: int = 900) -> int:
+        """Reset jobs that have been running for too long (likely from crashed workers)."""
+        with self.connect() as conn:
+            cutoff_time = (datetime.now(UTC) - timedelta(seconds=stale_after_seconds)).isoformat()
+            result = conn.execute(
+                """
+                UPDATE ingestion_jobs
+                SET status = 'pending',
+                    started_at = NULL
+                WHERE status = 'running' AND started_at < ?
+                """,
+                (cutoff_time,),
+            )
+            return result.rowcount
 
     def touch_service_heartbeat(self, service_name: str, detail: str = "") -> None:
         with self.connect() as conn:

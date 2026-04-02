@@ -44,7 +44,15 @@ def run_forever() -> None:
     if settings.enable_vector_retrieval:
         ensure_vector_model_available()
     store = GlobalStore()
+
+    # On startup, immediately recover any orphaned jobs from crashed workers
+    recovered = store.recover_stale_jobs(stale_after_seconds=0)
+    if recovered > 0:
+        print(f"Worker {get_worker_id()} recovered {recovered} orphaned job(s) on startup")
+
     while True:
+        # Recover stale jobs on each iteration (lightweight check)
+        store.recover_stale_jobs(stale_after_seconds=900)
         store.touch_service_heartbeat(get_worker_id(), "polling")
         job = store.take_next_job()
         if job is None:

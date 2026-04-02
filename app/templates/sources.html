@@ -80,6 +80,9 @@
         <div class="source-meta">{{ row.documents|length }} documents</div>
       </div>
       <div class="source-actions">
+        <form action="/sources/{{ row.source.id }}/sync" method="post">
+          <button type="submit" class="secondary-button">Sync</button>
+        </form>
         <form action="/sources/{{ row.source.id }}/repair-index" method="post">
           <button type="submit" class="secondary-button">Repair Index</button>
         </form>
