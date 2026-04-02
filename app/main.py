@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import mimetypes
 import os
+import random
 import shutil
 import urllib.error
 import urllib.request
@@ -307,6 +308,15 @@ async def search(
     search_warning = search_response.warning
     results = search_response.results
     store = GlobalStore()
+
+    # Pick random gudetama for empty results
+    gudetama_images = [
+        "gosh.png", "huh.png", "let me go.png", "look away.png", "meh.png",
+        "mirror.png", "my head hurts.png", "not listening.png", "sausage.png",
+        "seriously i cant.png", "sigh.png", "soy sauce.png", "trick or treat.png"
+    ]
+    random_gudetama = random.choice(gudetama_images)
+
     return templates.TemplateResponse(
         request,
         "results.html",
@@ -322,6 +332,7 @@ async def search(
             "search_warning": search_warning,
             "results_meta_label": None,
             "document_scope_title": None,
+            "random_gudetama": random_gudetama,
         },
     )
 
@@ -685,6 +696,15 @@ async def api_document_sections(source_root_id: int, document_id: int) -> Docume
 @app.get("/sources/{source_root_id}/documents/{document_id}", response_class=HTMLResponse)
 async def document_results_view(request: Request, source_root_id: int, document_id: int) -> HTMLResponse:
     store = GlobalStore()
+
+    # Pick random gudetama for empty results
+    gudetama_images = [
+        "gosh.png", "huh.png", "let me go.png", "look away.png", "meh.png",
+        "mirror.png", "my head hurts.png", "not listening.png", "sausage.png",
+        "seriously i cant.png", "sigh.png", "soy sauce.png", "trick or treat.png"
+    ]
+    random_gudetama = random.choice(gudetama_images)
+
     return templates.TemplateResponse(
         request,
         "results.html",
@@ -703,6 +723,7 @@ async def document_results_view(request: Request, source_root_id: int, document_
             "source_root_id": source_root_id,
             "document_id": document_id,
             "is_document_view": True,
+            "random_gudetama": random_gudetama,
         },
     )
 

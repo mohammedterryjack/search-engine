@@ -53,11 +53,21 @@ def strip_image_markup(text: str) -> str:
     return " ".join(cleaned.split())
 
 
-def build_docling_converter():
-    """Build DocumentConverter with memory-optimized settings.
+# Global singleton converter to prevent OCR models from reloading on each document
+_GLOBAL_CONVERTER = None
 
-    Note: Not cached - Docling internally manages model persistence.
+
+def build_docling_converter():
+    """Build or return existing DocumentConverter with memory-optimized settings.
+
+    Uses a global singleton to reuse OCR model instances across documents.
+    Without this, RapidOCR reloads 770 weights on every document causing OOM.
     """
+    global _GLOBAL_CONVERTER
+
+    if _GLOBAL_CONVERTER is not None:
+        return _GLOBAL_CONVERTER
+
     try:
         from docling.datamodel.document import InputFormat
         from docling.document_converter import DocumentConverter, PdfFormatOption
@@ -92,7 +102,10 @@ def build_docling_converter():
     if pipeline_options is not None:
         format_options[InputFormat.PDF] = PdfFormatOption(pipeline_options=pipeline_options)
 
-    return DocumentConverter(format_options=format_options) if format_options else DocumentConverter()
+    _GLOBAL_CONVERTER = (
+        DocumentConverter(format_options=format_options) if format_options else DocumentConverter()
+    )
+    return _GLOBAL_CONVERTER
 
 
 @dataclass(slots=True)

@@ -80,6 +80,11 @@
       {% endif %}
     </div>
     <div data-search-results>
+      {% if results|length == 0 and query %}
+      <div style="text-align: center; margin-top: 60px;">
+        <img src="/static/images/gudetama/{{ random_gudetama }}" alt="No results" style="max-width: 200px; opacity: 0.8;">
+      </div>
+      {% endif %}
       {% for result in results %}
       <article class="result-card">
         <div class="result-path">{{ result.document_path }}</div>
