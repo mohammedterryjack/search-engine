@@ -41,7 +41,37 @@ def extract_image_data(text: str) -> tuple[str | None, str | None]:
     mime = match.group("mime")
     if not data:
         return None, None
-    return mime, data
+
+    # Downsample large images to reduce memory usage
+    try:
+        import base64
+        from io import BytesIO
+        from PIL import Image
+
+        # Decode base64 to image
+        img_bytes = base64.b64decode(data)
+        img = Image.open(BytesIO(img_bytes))
+
+        # Resize if larger than max dimensions
+        MAX_WIDTH = 800
+        MAX_HEIGHT = 800
+
+        if img.width > MAX_WIDTH or img.height > MAX_HEIGHT:
+            # Calculate new size maintaining aspect ratio
+            ratio = min(MAX_WIDTH / img.width, MAX_HEIGHT / img.height)
+            new_size = (int(img.width * ratio), int(img.height * ratio))
+            img = img.resize(new_size, Image.Resampling.LANCZOS)
+
+        # Convert back to base64
+        buffer = BytesIO()
+        img_format = img.format or 'PNG'
+        img.save(buffer, format=img_format, optimize=True, quality=85)
+        downsampled_data = base64.b64encode(buffer.getvalue()).decode('utf-8')
+
+        return mime, downsampled_data
+    except Exception:
+        # If downsampling fails, return original
+        return mime, data
 
 
 def strip_image_markup(text: str) -> str:
