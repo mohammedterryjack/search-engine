@@ -448,12 +448,47 @@ async def status_view(request: Request) -> HTMLResponse:
         total_embeddings += int(stats["embedding_count"])
         total_postings += int(stats["term_posting_count"])
     heartbeats = store.service_heartbeats()
-    worker_heartbeat = heartbeats.get("worker")
     job_counts = store.job_status_counts()
     worker_stale_after_seconds = max(
         settings.poll_seconds * 3 + 3,
         900 if int(job_counts["running"]) > 0 else 0,
     )
+
+    # Gather all worker heartbeats
+    worker_heartbeats = []
+    for service_name, hb in heartbeats.items():
+        if service_name.startswith("worker"):
+            status = heartbeat_status(
+                str(hb["last_seen"]) if hb else None,
+                stale_after_seconds=worker_stale_after_seconds,
+            )
+            worker_heartbeats.append({
+                "name": service_name,
+                "status": status,
+                "detail": str(hb["detail"]) if hb else "",
+                "last_seen": str(hb["last_seen"]) if hb else "",
+            })
+
+    # Sort by worker name
+    worker_heartbeats.sort(key=lambda w: w["name"])
+
+    # Calculate overall worker status
+    if not worker_heartbeats:
+        overall_worker_status = "unknown"
+        worker_summary = "No workers"
+    else:
+        ok_count = sum(1 for w in worker_heartbeats if w["status"] == "ok")
+        total_count = len(worker_heartbeats)
+        if ok_count == total_count:
+            overall_worker_status = "ok"
+            worker_summary = f"{ok_count}/{total_count} workers ok"
+        elif ok_count == 0:
+            overall_worker_status = "stale"
+            worker_summary = f"0/{total_count} workers ok"
+        else:
+            overall_worker_status = "partial"
+            worker_summary = f"{ok_count}/{total_count} workers ok"
+
     return templates.TemplateResponse(
         request,
         "status.html",
@@ -471,11 +506,9 @@ async def status_view(request: Request) -> HTMLResponse:
             "reranker_enabled": settings.enable_reranker,
             "poll_seconds": settings.poll_seconds,
             "web_status": "ok",
-            "worker_status": heartbeat_status(
-                str(worker_heartbeat["last_seen"]) if worker_heartbeat else None,
-                stale_after_seconds=worker_stale_after_seconds,
-            ),
-            "worker_detail": str(worker_heartbeat["detail"]) if worker_heartbeat else "",
+            "worker_status": overall_worker_status,
+            "worker_summary": worker_summary,
+            "workers": worker_heartbeats,
         },
     )
 

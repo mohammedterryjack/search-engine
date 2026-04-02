@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import socket
 import time
 from pathlib import Path
 
@@ -8,6 +10,17 @@ from app.db.global_store import GlobalStore, utc_now
 from app.db.source_store import SourceStore
 from app.services.ingest import build_units, parse_document
 from app.services.vector_store import get_embedding_model, rebuild_faiss_index, update_faiss_index
+
+
+def get_worker_id() -> str:
+    """Get a unique identifier for this worker instance."""
+    hostname = socket.gethostname()
+    if hostname.startswith("search-engine-worker-"):
+        return hostname.replace("search-engine-", "")
+    container_id = os.environ.get("HOSTNAME", "")
+    if container_id:
+        return f"worker-{container_id[:12]}"
+    return "worker-unknown"
 
 
 def ensure_docling_available() -> None:
@@ -32,13 +45,13 @@ def run_forever() -> None:
         ensure_vector_model_available()
     store = GlobalStore()
     while True:
-        store.touch_service_heartbeat("worker", "polling")
+        store.touch_service_heartbeat(get_worker_id(), "polling")
         job = store.take_next_job()
         if job is None:
             time.sleep(settings.poll_seconds)
             continue
         try:
-            store.touch_service_heartbeat("worker", f"indexing {job['document_path']}")
+            store.touch_service_heartbeat(get_worker_id(), f"indexing {job['document_path']}")
             source_root = store.get_source_root(int(job["source_root_id"]))
             if source_root is None:
                 raise RuntimeError("source root not found")
@@ -68,10 +81,10 @@ def run_forever() -> None:
                     except Exception:
                         rebuild_faiss_index(db_path, source_store.all_content_unit_texts())
             store.mark_job_done(int(job["id"]))
-            store.touch_service_heartbeat("worker", f"done {job['document_path']}")
+            store.touch_service_heartbeat(get_worker_id(), f"done {job['document_path']}")
         except Exception as exc:
             store.mark_job_failed(int(job["id"]), str(exc))
-            store.touch_service_heartbeat("worker", f"failed {job['document_path']}")
+            store.touch_service_heartbeat(get_worker_id(), f"failed {job['document_path']}")
 
 
 if __name__ == "__main__":

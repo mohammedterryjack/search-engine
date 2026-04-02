@@ -48,11 +48,9 @@
         <div class="stat-value">{{ web_status|capitalize }}</div>
       </div>
       <div class="stat-tile {{ 'status-ok' if worker_status == 'ok' else 'status-bad' if worker_status == 'stale' else 'status-neutral' }}">
-        <div class="stat-label">Worker</div>
+        <div class="stat-label">Workers</div>
         <div class="stat-value">{{ worker_status|capitalize }}</div>
-        {% if worker_detail %}
-        <div class="small-status">{{ worker_detail }}</div>
-        {% endif %}
+        <div class="small-status">{{ worker_summary }}</div>
       </div>
       <div class="stat-tile">
         <div class="stat-label">Pending jobs</div>
@@ -117,5 +115,22 @@
       </div>
     </div>
   </section>
+
+  {% if workers %}
+  <section class="admin-card">
+    <h2>Worker Details</h2>
+    <div class="source-stats-grid">
+      {% for worker in workers %}
+      <div class="stat-tile {{ 'status-ok' if worker.status == 'ok' else 'status-bad' if worker.status == 'stale' else 'status-neutral' }}">
+        <div class="stat-label">{{ worker.name }}</div>
+        <div class="stat-value">{{ worker.status|capitalize }}</div>
+        {% if worker.detail %}
+        <div class="small-status">{{ worker.detail }}</div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
 </main>
 {% endblock %}
