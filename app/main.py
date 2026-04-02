@@ -480,8 +480,8 @@ async def status_view(request: Request) -> HTMLResponse:
     )
 
 
-@app.get("/sources/{source_root_id}/documents/{document_id}", response_class=HTMLResponse)
-async def document_results_view(request: Request, source_root_id: int, document_id: int) -> HTMLResponse:
+def _get_document_sections(source_root_id: int, document_id: int) -> tuple[list[SearchResult], str]:
+    """Helper to get document sections as SearchResult objects."""
     store = GlobalStore()
     source_root = store.get_source_root(source_root_id)
     if source_root is None:
@@ -494,30 +494,53 @@ async def document_results_view(request: Request, source_root_id: int, document_
     from app.models import SearchResult
 
     results = [
-            SearchResult(
-                source_root_id=source_root_id,
-                source_path=str(source_root["source_path"]),
-                document_id=int(row["document_id"]),
-                content_unit_id=int(row["content_unit_id"]),
-                document_path=str(row["document_path"]),
-                filename=str(row["filename"]),
-                unit_type=str(row["unit_type"]),
-                page_number=int(row["page_number"]) if row["page_number"] is not None else None,
-                section_name=str(row["section_name"]) if row["section_name"] is not None else "",
-                display_text=str(row["display_text"]) if row["display_text"] is not None else "",
-                image_mime=row["image_mime"],
-                image_data=row["image_data"],
-                score=0.0,
-            )
-            for row in rows
-        ]
+        SearchResult(
+            source_root_id=source_root_id,
+            source_path=str(source_root["source_path"]),
+            document_id=int(row["document_id"]),
+            content_unit_id=int(row["content_unit_id"]),
+            document_path=str(row["document_path"]),
+            filename=str(row["filename"]),
+            unit_type=str(row["unit_type"]),
+            page_number=int(row["page_number"]) if row["page_number"] is not None else None,
+            section_name=str(row["section_name"]) if row["section_name"] is not None else "",
+            display_text=str(row["display_text"]) if row["display_text"] is not None else "",
+            image_mime=row["image_mime"],
+            image_data=row["image_data"],
+            score=0.0,
+        )
+        for row in rows
+    ]
+    filename = str(rows[0]["filename"])
+    return results, filename
+
+
+class DocumentSectionsResponse(BaseModel):
+    results: list[dict[str, object]]
+    filename: str
+    result_count: int
+
+
+@app.get("/api/sources/{source_root_id}/documents/{document_id}", response_model=DocumentSectionsResponse)
+async def api_document_sections(source_root_id: int, document_id: int) -> DocumentSectionsResponse:
+    results, filename = _get_document_sections(source_root_id, document_id)
     _apply_highlights(results, "")
+    return DocumentSectionsResponse(
+        results=_serialize_search_results(results),
+        filename=filename,
+        result_count=len(results),
+    )
+
+
+@app.get("/sources/{source_root_id}/documents/{document_id}", response_class=HTMLResponse)
+async def document_results_view(request: Request, source_root_id: int, document_id: int) -> HTMLResponse:
+    store = GlobalStore()
     return templates.TemplateResponse(
         request,
         "results.html",
         {
             "query": "",
-            "results": results,
+            "results": [],
             "sources": store.list_source_roots(),
             "selected_sources": {source_root_id},
             "selected_unit_types": {"section", "figure", "table"},
@@ -525,8 +548,11 @@ async def document_results_view(request: Request, source_root_id: int, document_
             "vector_min_score": settings.vector_min_score_default,
             "search_error": None,
             "search_warning": None,
-            "document_scope_title": f"Document View · {rows[0]['filename']}",
-            "results_meta_label": f"{len(results)} content unit{'s' if len(results) != 1 else ''}",
+            "document_scope_title": "",
+            "results_meta_label": "",
+            "source_root_id": source_root_id,
+            "document_id": document_id,
+            "is_document_view": True,
         },
     )
 
