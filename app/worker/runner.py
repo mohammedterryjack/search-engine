@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gc
 import os
 import socket
 import time
@@ -63,17 +64,34 @@ def run_forever() -> None:
                 raise RuntimeError("source root not found")
             source_store = SourceStore(Path(str(source_root["db_path"])))
             document_path = Path(str(job["document_path"]))
+
+            # Parse document
             parsed = parse_document(document_path)
+            page_count = max((unit.page_number or 1) for unit in parsed) if parsed else 0
+
+            # Build units and convert to dicts
             units = build_units(parsed)
+
+            # Free parsed data immediately after building units
+            del parsed
+            gc.collect()
+
+            # Create/update document record
             document_id = source_store.upsert_document(
                 document_path=document_path,
                 status="indexed",
-                page_count=max((unit.page_number or 1) for unit in parsed) if parsed else 0,
+                page_count=page_count,
                 created_at=utc_now(),
                 updated_at=utc_now(),
             )
             old_content_unit_ids = source_store.document_content_unit_ids(document_id)
+
+            # Write all units to database
             source_store.replace_content_units(document_id, units)
+
+            # Free units from memory immediately after writing
+            del units
+            gc.collect()
             if settings.enable_vector_retrieval:
                 db_path = Path(str(source_root["db_path"]))
                 new_rows = source_store.document_content_unit_texts(document_id)
@@ -89,6 +107,9 @@ def run_forever() -> None:
             store.mark_job_done(int(job["id"]))
         except Exception as exc:
             store.mark_job_failed(int(job["id"]), str(exc))
+        finally:
+            # Force garbage collection after each job to free memory
+            gc.collect()
 
 
 if __name__ == "__main__":

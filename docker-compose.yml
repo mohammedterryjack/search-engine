@@ -47,7 +47,7 @@ services:
       replicas: 3
       resources:
         limits:
-          memory: 8G
+          memory: 12G
         reservations:
           memory: 2G
     depends_on:

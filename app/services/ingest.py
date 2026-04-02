@@ -118,6 +118,11 @@ def parse_document(document_path: Path) -> list[ParsedUnit]:
         raise RuntimeError(f"Docling returned no extractable text for {document_path.name}.")
 
     units = extract_structured_units(result.document)
+
+    # Free memory from docling result
+    del result
+    del markdown
+
     if units:
         return units
 
