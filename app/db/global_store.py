@@ -58,7 +58,6 @@ class GlobalStore:
                     created_at TEXT NOT NULL,
                     started_at TEXT,
                     finished_at TEXT,
-                    retry_count INTEGER NOT NULL DEFAULT 0,
                     FOREIGN KEY(source_root_id) REFERENCES source_roots(id),
                     UNIQUE(source_root_id, document_path)
                 );
@@ -204,7 +203,6 @@ class GlobalStore:
                     error_message = NULL,
                     started_at = NULL,
                     finished_at = NULL,
-                    retry_count = 0,
                     created_at = ?
                 WHERE id = ?
                 """,
@@ -225,8 +223,7 @@ class GlobalStore:
                 UPDATE ingestion_jobs
                 SET status = 'failed',
                     error_message = 'Worker crashed while processing (likely OOM). Retry manually if needed.',
-                    finished_at = ?,
-                    retry_count = retry_count + 1
+                    finished_at = ?
                 WHERE status = 'running'
                   AND started_at < ?
                 """,
