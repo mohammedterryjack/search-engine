@@ -47,24 +47,24 @@
         <div class="stat-label">Web</div>
         <div class="stat-value">{{ web_status|capitalize }}</div>
       </div>
-      <div class="stat-tile {{ 'status-ok' if worker_status == 'ok' else 'status-bad' if worker_status == 'stale' else 'status-neutral' }}">
+      <div class="stat-tile {{ 'status-ok' if worker_status == 'ok' else 'status-bad' if worker_status == 'stale' else 'status-neutral' }}" data-worker-status>
         <div class="stat-label">Workers</div>
         <div class="stat-value">{{ worker_status|capitalize }}</div>
         <div class="small-status">{{ worker_summary }}</div>
       </div>
-      <div class="stat-tile">
+      <div class="stat-tile" data-job-pending>
         <div class="stat-label">Pending jobs</div>
         <div class="stat-value">{{ job_counts.pending }}</div>
       </div>
-      <div class="stat-tile">
+      <div class="stat-tile" data-job-running>
         <div class="stat-label">Running jobs</div>
         <div class="stat-value">{{ job_counts.running }}</div>
       </div>
-      <div class="stat-tile">
+      <div class="stat-tile" data-job-done>
         <div class="stat-label">Done jobs</div>
         <div class="stat-value">{{ job_counts.done }}</div>
       </div>
-      <div class="stat-tile">
+      <div class="stat-tile" data-job-failed>
         <div class="stat-label">Failed jobs</div>
         <div class="stat-value">{{ job_counts.failed }}</div>
       </div>
@@ -121,21 +121,27 @@
     <h2>Worker Details</h2>
     <div class="worker-grid">
       {% for worker in workers %}
-      <div class="worker-card {{ 'status-ok' if worker.status == 'ok' else 'status-bad' if worker.status == 'stale' else 'status-neutral' }}">
-        <div>
+      <div class="worker-card {{ 'status-ok' if worker.status == 'ok' else 'status-bad' if worker.status == 'stale' else 'status-neutral' }}" data-worker-name="{{ worker.name }}">
+        <div class="worker-card-content">
           <div class="stat-label">{{ worker.name }}</div>
           <div class="stat-value">{{ worker.status|capitalize }}</div>
           {% if worker.detail %}
           <div class="small-status">{{ worker.detail }}</div>
           {% endif %}
         </div>
-        <form action="/workers/{{ worker.name }}/restart" method="post">
-          <button type="submit" class="secondary-button" title="Restart this worker">Restart</button>
-        </form>
       </div>
       {% endfor %}
     </div>
   </section>
+
+  <section class="admin-card" id="worker-logs-section" style="display: none;">
+    <div class="worker-logs-header">
+      <h3 id="worker-logs-title">Worker Logs</h3>
+      <button id="close-logs" class="icon-button">&#x2715;</button>
+    </div>
+    <pre id="worker-logs-content" class="worker-logs"></pre>
+  </section>
   {% endif %}
 </main>
+<script type="module" src="{{ url_for('static', path='/js/status-page.js') }}"></script>
 {% endblock %}

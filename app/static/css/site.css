@@ -809,14 +809,18 @@ mark {
 }
 
 .worker-card {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
+  position: relative;
   padding: 1rem;
   border: 1px solid #f1f3f4;
   border-radius: 8px;
   background: white;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.worker-card:hover {
+  border-color: #dadce0;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
 .worker-card.status-ok {
@@ -829,6 +833,31 @@ mark {
 
 .worker-card.status-neutral {
   border-left: 3px solid var(--muted);
+}
+
+.worker-logs-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.worker-logs-header h3 {
+  margin: 0;
+}
+
+.worker-logs {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  padding: 1rem;
+  border-radius: 4px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  max-height: 500px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 
 .icon-button {

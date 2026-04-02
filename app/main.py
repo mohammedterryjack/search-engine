@@ -202,7 +202,8 @@ def ensure_runtime_dirs() -> None:
 @app.on_event("startup")
 def startup() -> None:
     ensure_runtime_dirs()
-    GlobalStore().touch_service_heartbeat("web", "startup")
+    # Database initialization
+    GlobalStore()
 
 
 def parse_iso_timestamp(value: str | None) -> datetime | None:
@@ -212,14 +213,6 @@ def parse_iso_timestamp(value: str | None) -> datetime | None:
         return datetime.fromisoformat(value)
     except ValueError:
         return None
-
-
-def heartbeat_status(last_seen: str | None, *, stale_after_seconds: float) -> str:
-    timestamp = parse_iso_timestamp(last_seen)
-    if timestamp is None:
-        return "unknown"
-    age = (datetime.now(UTC) - timestamp).total_seconds()
-    return "ok" if age <= stale_after_seconds else "stale"
 
 
 @app.exception_handler(404)
@@ -377,7 +370,6 @@ async def sources_view(
     source_path: str = "",
 ) -> HTMLResponse:
     store = GlobalStore()
-    store.touch_service_heartbeat("web", "sources")
     rows = []
     overall_unit_counts = {"section": 0, "figure": 0, "table": 0}
     global_job_counts = store.job_status_counts()
@@ -435,7 +427,6 @@ async def sources_view(
 @app.get("/status", response_class=HTMLResponse)
 async def status_view(request: Request) -> HTMLResponse:
     store = GlobalStore()
-    store.touch_service_heartbeat("web", "status")
     source_rows = store.list_source_roots()
     total_documents = 0
     total_content_units = 0
@@ -447,43 +438,24 @@ async def status_view(request: Request) -> HTMLResponse:
         total_content_units += int(stats["content_unit_count"])
         total_embeddings += int(stats["embedding_count"])
         total_postings += int(stats["term_posting_count"])
-    heartbeats = store.service_heartbeats()
     job_counts = store.job_status_counts()
-    worker_stale_after_seconds = max(
-        settings.poll_seconds * 3 + 3,
-        900 if int(job_counts["running"]) > 0 else 0,
-    )
 
-    # Gather all worker heartbeats
-    worker_heartbeats = []
-    for service_name, hb in heartbeats.items():
-        if service_name.startswith("worker"):
-            status = heartbeat_status(
-                str(hb["last_seen"]) if hb else None,
-                stale_after_seconds=worker_stale_after_seconds,
-            )
-            worker_heartbeats.append({
-                "name": service_name,
-                "status": status,
-                "detail": str(hb["detail"]) if hb else "",
-                "last_seen": str(hb["last_seen"]) if hb else "",
-            })
-
-    # Sort by worker name
-    worker_heartbeats.sort(key=lambda w: w["name"])
+    # Get workers from Docker
+    workers = get_docker_workers()
+    workers.sort(key=lambda w: w["name"])
 
     # Calculate overall worker status
-    if not worker_heartbeats:
+    if not workers:
         overall_worker_status = "unknown"
         worker_summary = "No workers"
     else:
-        ok_count = sum(1 for w in worker_heartbeats if w["status"] == "ok")
-        total_count = len(worker_heartbeats)
+        ok_count = sum(1 for w in workers if w["status"] == "ok")
+        total_count = len(workers)
         if ok_count == total_count:
             overall_worker_status = "ok"
             worker_summary = f"{ok_count}/{total_count} workers ok"
         elif ok_count == 0:
-            overall_worker_status = "stale"
+            overall_worker_status = "stopped"
             worker_summary = f"0/{total_count} workers ok"
         else:
             overall_worker_status = "partial"
@@ -508,16 +480,158 @@ async def status_view(request: Request) -> HTMLResponse:
             "web_status": "ok",
             "worker_status": overall_worker_status,
             "worker_summary": worker_summary,
-            "workers": worker_heartbeats,
+            "workers": workers,
         },
     )
 
 
-@app.post("/workers/{worker_id}/restart")
-async def restart_worker(worker_id: str) -> RedirectResponse:
+@app.get("/api/workers/{worker_name}/logs")
+async def worker_logs_stream(worker_name: str):
+    """Stream worker logs via SSE."""
+    import subprocess
+
+    async def log_stream():
+        try:
+            # Find container name from worker name
+            result = subprocess.run(
+                ["docker", "ps", "--filter", f"name={worker_name}", "--format", "{{.Names}}"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            container_name = result.stdout.strip()
+
+            if not container_name:
+                yield f"data: Worker container not found\n\n"
+                return
+
+            # Stream logs
+            process = subprocess.Popen(
+                ["docker", "logs", "-f", "--tail", "100", container_name],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True
+            )
+
+            for line in process.stdout:
+                yield f"data: {json.dumps({'log': line.rstrip()})}\n\n"
+                await asyncio.sleep(0.01)
+
+        except Exception as e:
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+    return StreamingResponse(
+        log_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        }
+    )
+
+
+from starlette.responses import StreamingResponse
+import asyncio
+import json
+
+
+async def status_event_stream():
+    """Server-Sent Events stream for status updates."""
+    while True:
+        try:
+            status_data = await get_status_data()
+            yield f"data: {json.dumps(status_data)}\n\n"
+            await asyncio.sleep(3)  # Send updates every 3 seconds
+        except Exception as e:
+            print(f"Status stream error: {e}")
+            break
+
+
+def get_docker_workers() -> list[dict[str, str]]:
+    """Get worker status from Docker."""
+    try:
+        import docker
+        client = docker.from_env()
+        containers = client.containers.list(filters={"name": "worker"})
+
+        workers = []
+        for container in containers:
+            name = container.name.replace("search-engine-", "")
+            status = container.status  # 'running', 'exited', etc.
+            # Get uptime from container stats
+            status_text = status.capitalize()
+            if status == "running":
+                status_value = "ok"
+            else:
+                status_value = "stopped"
+
+            workers.append({
+                "name": name,
+                "status": status_value,
+                "detail": status_text,
+            })
+        return workers
+    except Exception as e:
+        print(f"Failed to get Docker workers: {e}")
+        return []
+
+
+async def get_status_data() -> dict[str, object]:
     store = GlobalStore()
-    store.signal_worker_shutdown(worker_id)
-    return RedirectResponse("/status", status_code=303)
+    job_counts = store.job_status_counts()
+
+    # Get workers from Docker
+    workers = get_docker_workers()
+    workers.sort(key=lambda w: w["name"])
+
+    # Calculate overall worker status
+    if not workers:
+        overall_worker_status = "unknown"
+        worker_summary = "No workers"
+    else:
+        ok_count = sum(1 for w in workers if w["status"] == "ok")
+        total_count = len(workers)
+        if ok_count == total_count:
+            overall_worker_status = "ok"
+            worker_summary = f"{ok_count}/{total_count} workers ok"
+        elif ok_count == 0:
+            overall_worker_status = "stopped"
+            worker_summary = f"0/{total_count} workers ok"
+        else:
+            overall_worker_status = "partial"
+            worker_summary = f"{ok_count}/{total_count} workers ok"
+
+    return {
+        "worker_status": overall_worker_status,
+        "worker_summary": worker_summary,
+        "workers": workers,
+        "job_counts": {
+            "pending": int(job_counts["pending"]),
+            "running": int(job_counts["running"]),
+            "done": int(job_counts["done"]),
+            "failed": int(job_counts["failed"]),
+        },
+        "indexing_active": int(job_counts["running"]) > 0,
+    }
+
+
+@app.get("/api/status/stream")
+async def api_status_stream():
+    """Server-Sent Events endpoint for live status updates."""
+    return StreamingResponse(
+        status_event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        }
+    )
+
+
+@app.get("/api/status")
+async def api_status() -> dict[str, object]:
+    """One-time status snapshot."""
+    return await get_status_data()
 
 
 def _get_document_sections(source_root_id: int, document_id: int) -> tuple[list[SearchResult], str]:

@@ -8,13 +8,6 @@
     <a href="/status" class="secondary-link">Status</a>
   </header>
 
-  <section class="admin-hero-card">
-    <div>
-      <div class="source-hint">Index status, source databases, and ingestion activity all live here.</div>
-    </div>
-    <img src="{{ url_for('static', path='/images/stats.png') }}" alt="" class="stats-hero-image">
-  </section>
-
   <section class="admin-card">
     <div class="source-meta">
       {{ "Indexing active" if indexing_active else "Indexer idle" }}
@@ -53,11 +46,12 @@
   </section>
   {% endif %}
 
-  <section class="admin-card">
-    <h3>Whitelisted Paths</h3>
-    <div class="source-hint">
-      Enter an absolute path under <code>{{ allowed_source_root }}</code>. Manual absolute paths are the only supported way to add a source.
-    </div>
+  <section class="admin-card-with-image">
+    <div>
+      <h3>Whitelisted Paths</h3>
+      <div class="source-hint">
+        Enter an absolute path under <code>{{ allowed_source_root }}</code>. Manual absolute paths are the only supported way to add a source.
+      </div>
     {% if error %}
     <div class="form-error">{{ error }}</div>
     {% endif %}
@@ -99,6 +93,8 @@
     {% else %}
     <div class="job-row muted" style="margin-top: 1rem;">No sources yet.</div>
     {% endif %}
+    </div>
+    <img src="{{ url_for('static', path='/images/stats.png') }}" alt="" class="stats-hero-image">
   </section>
 
   {% if rows %}

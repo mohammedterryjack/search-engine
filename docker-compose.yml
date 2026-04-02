@@ -8,6 +8,7 @@ services:
       - .:/app
       - ${HOME}/.searchi:/searchi_data
       - /Users:/Users:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       SEARCHY_DATA_DIR: /searchi_data
       SEARCHY_APP_DB_PATH: /searchi_data/app_data/searchy_app.sqlite3

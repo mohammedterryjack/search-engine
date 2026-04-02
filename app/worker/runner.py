@@ -51,20 +51,13 @@ def run_forever() -> None:
         print(f"Worker {get_worker_id()} recovered {recovered} orphaned job(s) on startup")
 
     while True:
-        # Check for shutdown signal
-        if store.check_shutdown_signal(get_worker_id()):
-            print(f"Worker {get_worker_id()} received shutdown signal, exiting gracefully...")
-            return
-
         # Recover stale jobs on each iteration (lightweight check)
         store.recover_stale_jobs(stale_after_seconds=900)
-        store.touch_service_heartbeat(get_worker_id(), "polling")
         job = store.take_next_job()
         if job is None:
             time.sleep(settings.poll_seconds)
             continue
         try:
-            store.touch_service_heartbeat(get_worker_id(), f"indexing {job['document_path']}")
             source_root = store.get_source_root(int(job["source_root_id"]))
             if source_root is None:
                 raise RuntimeError("source root not found")
@@ -94,10 +87,8 @@ def run_forever() -> None:
                     except Exception:
                         rebuild_faiss_index(db_path, source_store.all_content_unit_texts())
             store.mark_job_done(int(job["id"]))
-            store.touch_service_heartbeat(get_worker_id(), f"done {job['document_path']}")
         except Exception as exc:
             store.mark_job_failed(int(job["id"]), str(exc))
-            store.touch_service_heartbeat(get_worker_id(), f"failed {job['document_path']}")
 
 
 if __name__ == "__main__":
