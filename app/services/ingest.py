@@ -71,10 +71,22 @@ def build_docling_converter():
     try:
         from docling.datamodel.document import InputFormat
         from docling.document_converter import DocumentConverter, PdfFormatOption
+        from docling.datamodel.pipeline_options import RapidOcrOptions
     except Exception as exc:
         raise RuntimeError(
             "Docling is required for ingestion but is not available in the worker environment."
         ) from exc
+
+    # Configure RapidOCR with thread settings for better performance
+    # intra_op_num_threads: threads within each operator (default -1 uses all cores)
+    # inter_op_num_threads: threads for parallelizing operations (default -1)
+    rapidocr_options = RapidOcrOptions(
+        rapidocr_params={
+            "Det": {"intra_op_num_threads": 4},
+            "Cls": {"intra_op_num_threads": 4},
+            "Rec": {"intra_op_num_threads": 4},
+        }
+    )
 
     pipeline_options = None
     try:
@@ -84,11 +96,13 @@ def build_docling_converter():
         # - images_scale=1.0: Reduce from default 2.0 (Issue #3216)
         # - generate_parsed_pages=False: Don't keep parsed pages in memory (Issue #2540)
         # - generate_page_images=False: Skip page image generation to save memory
+        # - ocr_options: Configure RapidOCR threading
         pipeline_options = ThreadedPdfPipelineOptions(
             generate_picture_images=True,
             images_scale=1.0,
             generate_parsed_pages=False,
             generate_page_images=False,
+            ocr_options=rapidocr_options,
         )
     except Exception:
         try:
@@ -99,6 +113,7 @@ def build_docling_converter():
                 images_scale=1.0,
                 generate_parsed_pages=False,
                 generate_page_images=False,
+                ocr_options=rapidocr_options,
             )
         except Exception:
             pipeline_options = None
