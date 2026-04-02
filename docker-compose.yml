@@ -43,6 +43,7 @@ services:
       SEARCHY_STATUS_TOKEN: searchi-local-status
       SEARCHY_POLL_SECONDS: "3"
     deploy:
+      replicas: 3
       resources:
         limits:
           memory: 8G
