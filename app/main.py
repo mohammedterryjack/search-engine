@@ -513,6 +513,13 @@ async def status_view(request: Request) -> HTMLResponse:
     )
 
 
+@app.post("/workers/{worker_id}/restart")
+async def restart_worker(worker_id: str) -> RedirectResponse:
+    store = GlobalStore()
+    store.signal_worker_shutdown(worker_id)
+    return RedirectResponse("/status", status_code=303)
+
+
 def _get_document_sections(source_root_id: int, document_id: int) -> tuple[list[SearchResult], str]:
     """Helper to get document sections as SearchResult objects."""
     store = GlobalStore()
@@ -655,45 +662,10 @@ async def retry_failed_source_jobs(source_root_id: int) -> RedirectResponse:
     return sources_redirect(success="Failed jobs have been queued for retry.")
 
 
-@app.post("/sources/{source_root_id}/clear")
-async def clear_source(source_root_id: int) -> RedirectResponse:
-    store = GlobalStore()
-    source_root = store.get_source_root(source_root_id)
-    if source_root is None:
-        raise HTTPException(status_code=404, detail="Source not found")
-    source_store = SourceStore(Path(str(source_root["db_path"])))
-    db_path = Path(str(source_root["db_path"]))
-    removed_ids = source_store.clear_with_content_ids()
-    if removed_ids:
-        update_faiss_index(db_path, remove_ids=removed_ids)
-    return RedirectResponse(url="/sources", status_code=303)
-
-
-@app.post("/sources/{source_root_id}/retry-failed")
-async def retry_failed_source_jobs(source_root_id: int) -> RedirectResponse:
-    store = GlobalStore()
-    if store.get_source_root(source_root_id) is None:
-        raise HTTPException(status_code=404, detail="Source not found")
-    store.retry_failed_jobs(source_root_id)
-    return RedirectResponse(url="/sources", status_code=303)
-
-
 @app.post("/jobs/{job_id}/retry")
 async def retry_job(job_id: int) -> RedirectResponse:
     store = GlobalStore()
     store.retry_job(job_id)
-    return RedirectResponse(url="/sources", status_code=303)
-
-
-@app.post("/sources/{source_root_id}/repair-index")
-async def repair_source_index(source_root_id: int) -> RedirectResponse:
-    store = GlobalStore()
-    source_root = store.get_source_root(source_root_id)
-    if source_root is None:
-        raise HTTPException(status_code=404, detail="Source not found")
-    db_path = Path(str(source_root["db_path"]))
-    source_store = SourceStore(db_path)
-    rebuild_faiss_index(db_path, source_store.all_content_unit_texts())
     return RedirectResponse(url="/sources", status_code=303)
 
 

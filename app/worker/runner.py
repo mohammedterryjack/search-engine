@@ -51,6 +51,11 @@ def run_forever() -> None:
         print(f"Worker {get_worker_id()} recovered {recovered} orphaned job(s) on startup")
 
     while True:
+        # Check for shutdown signal
+        if store.check_shutdown_signal(get_worker_id()):
+            print(f"Worker {get_worker_id()} received shutdown signal, exiting gracefully...")
+            return
+
         # Recover stale jobs on each iteration (lightweight check)
         store.recover_stale_jobs(stale_after_seconds=900)
         store.touch_service_heartbeat(get_worker_id(), "polling")

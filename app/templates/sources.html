@@ -54,169 +54,113 @@
   {% endif %}
 
   <section class="admin-card">
+    <h3>Whitelisted Paths</h3>
+    <div class="source-hint">
+      Enter an absolute path under <code>{{ allowed_source_root }}</code>. Manual absolute paths are the only supported way to add a source.
+    </div>
+    {% if error %}
+    <div class="form-error">{{ error }}</div>
+    {% endif %}
+    {% if success %}
+    <div class="form-success">{{ success }}</div>
+    {% endif %}
     <form action="/sources" method="post" class="source-form">
-      <label for="source_path">Add whitelist path</label>
-      <div class="source-hint">
-        Enter an absolute path under <code>{{ allowed_source_root }}</code>. Manual absolute paths are the only supported way to add a source.
-      </div>
-      {% if error %}
-      <div class="form-error">{{ error }}</div>
-      {% endif %}
-      {% if success %}
-      <div class="form-success">{{ success }}</div>
-      {% endif %}
       <div class="source-input-row">
         <input id="source_path" name="source_path" type="text" class="source-input" placeholder="/absolute/path/or/file" value="{{ source_path }}" required>
         <button type="submit" class="primary-button">Add Source</button>
       </div>
     </form>
-  </section>
 
-  {% for row in rows %}
-  <section class="admin-card">
-    <div class="source-header">
-      <div>
-        <h2>{{ row.source.source_path }}</h2>
-        <div class="source-meta">{{ row.documents|length }} documents</div>
-      </div>
-      <div class="source-actions">
-        <form action="/sources/{{ row.source.id }}/sync" method="post">
-          <button type="submit" class="secondary-button">Sync</button>
-        </form>
-        <form action="/sources/{{ row.source.id }}/repair-index" method="post">
-          <button type="submit" class="secondary-button">Repair Index</button>
-        </form>
-        <form action="/sources/{{ row.source.id }}/retry-failed" method="post">
-          <button type="submit" class="secondary-button">Retry Failed</button>
-        </form>
-        <form action="/sources/{{ row.source.id }}/clear" method="post">
-          <button type="submit" class="secondary-button">Clear DB</button>
-        </form>
-        <form action="/sources/{{ row.source.id }}/delete" method="post">
-          <button type="submit" class="danger-button">Remove Source</button>
-        </form>
-      </div>
-    </div>
-
-    <div class="source-stats-grid">
-      <div class="stat-tile">
-        <div class="stat-label">Documents</div>
-        <div class="stat-value">{{ row.stats.document_count }}</div>
-      </div>
-      <div class="stat-tile">
-        <div class="stat-label">Content units</div>
-        <div class="stat-value">{{ row.stats.content_unit_count }}</div>
-      </div>
-      <div class="stat-tile">
-        <div class="stat-label">Postings</div>
-        <div class="stat-value">{{ row.stats.term_posting_count }}</div>
-      </div>
-      <div class="stat-tile">
-        <div class="stat-label">Embeddings</div>
-        <div class="stat-value">{{ row.stats.embedding_count }}</div>
-      </div>
-      <div class="stat-tile">
-        <div class="stat-label">Sections</div>
-        <div class="stat-value">{{ row.stats.unit_type_counts.section }}</div>
-      </div>
-      <div class="stat-tile">
-        <div class="stat-label">Figures</div>
-        <div class="stat-value">{{ row.stats.unit_type_counts.figure }}</div>
-      </div>
-      <div class="stat-tile">
-        <div class="stat-label">Tables</div>
-        <div class="stat-value">{{ row.stats.unit_type_counts.table }}</div>
-      </div>
-      <div class="stat-tile">
-        <div class="stat-label">SQLite size</div>
-        <div class="stat-value">{{ format_bytes(row.stats.db_size_bytes) }}</div>
-      </div>
-      <div class="stat-tile">
-        <div class="stat-label">FAISS</div>
-        <div class="stat-value">{{ "Present" if row.stats.faiss_exists else "Missing" }}</div>
-        <div class="small-status">{{ format_bytes(row.stats.faiss_size_bytes) if row.stats.faiss_exists else "0 B" }}</div>
-      </div>
-      <div class="stat-tile {{ 'status-ok' if row.vector_status == 'ok' else 'status-neutral' if row.vector_status == 'syncing' else 'status-bad' }}">
-        <div class="stat-label">Vector sync</div>
-        <div class="stat-value">{{ row.vector_status|capitalize }}</div>
-        <div class="small-status">
-          Missing {{ row.vector_report.missing_in_faiss|length }} / Stale {{ row.vector_report.stale_in_faiss|length }}
-        </div>
-      </div>
-      <div class="stat-tile">
-        <div class="stat-label">Pending / Running</div>
-        <div class="stat-value">{{ row.job_counts.pending }} / {{ row.job_counts.running }}</div>
-      </div>
-      <div class="stat-tile">
-        <div class="stat-label">Done / Failed</div>
-        <div class="stat-value">{{ row.job_counts.done }} / {{ row.job_counts.failed }}</div>
-      </div>
-    </div>
-
-    <div class="jobs-block">
-      <h3>Recent Jobs</h3>
-      {% for job in row.jobs %}
-      <div class="job-row">
-        <span class="job-status job-{{ job.status }}">{{ job.status }}</span>
-        <div class="job-detail">
-          <div>{{ job.document_path }}</div>
-          {% if job.error_message %}
-          <div class="job-error">{{ job.error_message }}</div>
-          <form action="/jobs/{{ job.id }}/retry" method="post" class="job-retry-form">
-            <button type="submit" class="text-button">Retry Job</button>
-          </form>
-          {% endif %}
-        </div>
-      </div>
-      {% else %}
-      <div class="job-row muted">No jobs yet.</div>
-      {% endfor %}
-    </div>
-
-    <section class="admin-card">
-      <h3>Extraction totals</h3>
-      <div class="stats-grid">
-        <div class="stat-tile">
-          <div class="stat-label">Sections</div>
-          <div class="stat-value">{{ overall_unit_counts.section }}</div>
-        </div>
-        <div class="stat-tile">
-          <div class="stat-label">Figures</div>
-          <div class="stat-value">{{ overall_unit_counts.figure }}</div>
-        </div>
-        <div class="stat-tile">
-          <div class="stat-label">Tables</div>
-          <div class="stat-value">{{ overall_unit_counts.table }}</div>
-        </div>
-      </div>
-    </section>
-
-    <div class="documents-block">
-      <h3>Indexed Documents</h3>
-      {% for document in row.documents %}
-      <div class="document-row">
+    {% if rows %}
+    <div style="margin-top: 1.5rem;">
+      {% for row in rows %}
+      <div class="source-path-row">
         <div>
-          <div class="document-title"><a href="/sources/{{ row.source.id }}/documents/{{ document.record.id }}" class="document-link">{{ document.record.filename }}</a></div>
-          <div class="document-meta">{{ document.record.source_path }}</div>
-          <div class="document-meta document-unit-stats">
-            <span>{{ document.unit_counts.section }} sections</span>
-            <span>{{ document.unit_counts.figure }} figures</span>
-            <span>{{ document.unit_counts.table }} tables</span>
+          <div class="source-path-title">{{ row.source.source_path }}</div>
+          <div class="source-path-meta">
+            {{ row.documents|length }} documents ·
+            {{ row.stats.content_unit_count }} content units ·
+            {{ row.job_counts.pending }} pending ·
+            {{ row.job_counts.running }} running ·
+            {{ row.job_counts.failed }} failed
           </div>
         </div>
-        <form action="/sources/{{ row.source.id }}/documents/{{ document.record.id }}/delete" method="post">
-          <button type="submit" class="text-button">Remove</button>
-        </form>
+        <div class="source-actions">
+          <form action="/sources/{{ row.source.id }}/sync" method="post">
+            <button type="submit" class="icon-button" title="Sync - scan for new documents">&#x21bb;</button>
+          </form>
+          <form action="/sources/{{ row.source.id }}/delete" method="post">
+            <button type="submit" class="icon-button danger-icon" title="Remove source">&#x2715;</button>
+          </form>
+        </div>
       </div>
-      {% else %}
-      <div class="document-row muted">Nothing indexed yet.</div>
       {% endfor %}
     </div>
+    {% else %}
+    <div class="job-row muted" style="margin-top: 1rem;">No sources yet.</div>
+    {% endif %}
   </section>
-  {% else %}
-  <section class="admin-card empty-admin">
-    No sources yet.
+
+  {% if rows %}
+  <section class="admin-card">
+    <h3>Recent Jobs</h3>
+    {% set all_jobs = [] %}
+    {% for row in rows %}
+      {% for job in row.jobs %}
+        {% set _ = all_jobs.append(job) %}
+      {% endfor %}
+    {% endfor %}
+
+    {% for job in all_jobs[:20] %}
+    <div class="job-row">
+      <span class="job-status job-{{ job.status }}">{{ job.status }}</span>
+      <div class="job-detail">
+        <div>{{ job.document_path }}</div>
+        {% if job.error_message %}
+        <div class="job-error">{{ job.error_message }}</div>
+        <form action="/jobs/{{ job.id }}/retry" method="post" class="job-retry-form">
+          <button type="submit" class="text-button">Retry Job</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+    {% else %}
+    <div class="job-row muted">No jobs yet.</div>
+    {% endfor %}
   </section>
-  {% endfor %}
+
+  <section class="admin-card">
+    <h3>Indexed Documents</h3>
+    {% set all_documents = [] %}
+    {% for row in rows %}
+      {% for document in row.documents %}
+        {% set _ = all_documents.append({'document': document, 'source_id': row.source.id}) %}
+      {% endfor %}
+    {% endfor %}
+
+    {% for item in all_documents %}
+    <div class="document-row">
+      <div>
+        <div class="document-title">
+          <a href="/sources/{{ item.source_id }}/documents/{{ item.document.record.id }}" class="document-link">
+            {{ item.document.record.filename }}
+          </a>
+        </div>
+        <div class="document-meta">{{ item.document.record.source_path }}</div>
+        <div class="document-meta document-unit-stats">
+          <span>{{ item.document.unit_counts.section }} sections</span>
+          <span>{{ item.document.unit_counts.figure }} figures</span>
+          <span>{{ item.document.unit_counts.table }} tables</span>
+        </div>
+      </div>
+      <form action="/sources/{{ item.source_id }}/documents/{{ item.document.record.id }}/delete" method="post">
+        <button type="submit" class="text-button">Remove</button>
+      </form>
+    </div>
+    {% else %}
+    <div class="document-row muted">Nothing indexed yet.</div>
+    {% endfor %}
+  </section>
+  {% endif %}
 </main>
 {% endblock %}

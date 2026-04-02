@@ -777,6 +777,91 @@ mark {
   word-break: break-all;
 }
 
+.source-path-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 0;
+  border-top: 1px solid #f1f3f4;
+}
+
+.source-path-row:first-of-type {
+  border-top: none;
+}
+
+.source-path-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+  margin-bottom: 0.35rem;
+  word-break: break-all;
+}
+
+.source-path-meta {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.worker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.worker-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid #f1f3f4;
+  border-radius: 8px;
+  background: white;
+}
+
+.worker-card.status-ok {
+  border-left: 3px solid var(--green);
+}
+
+.worker-card.status-bad {
+  border-left: 3px solid var(--red);
+}
+
+.worker-card.status-neutral {
+  border-left: 3px solid var(--muted);
+}
+
+.icon-button {
+  border: 1px solid #dadce0;
+  background: white;
+  color: #5f6368;
+  padding: 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+  min-width: 36px;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.icon-button:hover {
+  background: #f8f9fa;
+  border-color: #5f6368;
+}
+
+.icon-button.danger-icon {
+  color: var(--red);
+}
+
+.icon-button.danger-icon:hover {
+  background: #fef7f7;
+  border-color: var(--red);
+}
+
 .source-meta,
 .muted,
 .document-meta {
@@ -896,6 +981,7 @@ mark {
 
   .source-input-row,
   .source-header,
+  .source-path-row,
   .source-actions,
   .search-form,
   .admin-hero-card,

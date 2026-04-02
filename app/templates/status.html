@@ -119,14 +119,19 @@
   {% if workers %}
   <section class="admin-card">
     <h2>Worker Details</h2>
-    <div class="source-stats-grid">
+    <div class="worker-grid">
       {% for worker in workers %}
-      <div class="stat-tile {{ 'status-ok' if worker.status == 'ok' else 'status-bad' if worker.status == 'stale' else 'status-neutral' }}">
-        <div class="stat-label">{{ worker.name }}</div>
-        <div class="stat-value">{{ worker.status|capitalize }}</div>
-        {% if worker.detail %}
-        <div class="small-status">{{ worker.detail }}</div>
-        {% endif %}
+      <div class="worker-card {{ 'status-ok' if worker.status == 'ok' else 'status-bad' if worker.status == 'stale' else 'status-neutral' }}">
+        <div>
+          <div class="stat-label">{{ worker.name }}</div>
+          <div class="stat-value">{{ worker.status|capitalize }}</div>
+          {% if worker.detail %}
+          <div class="small-status">{{ worker.detail }}</div>
+          {% endif %}
+        </div>
+        <form action="/workers/{{ worker.name }}/restart" method="post">
+          <button type="submit" class="secondary-button" title="Restart this worker">Restart</button>
+        </form>
       </div>
       {% endfor %}
     </div>

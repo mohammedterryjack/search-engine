@@ -67,6 +67,11 @@ class GlobalStore:
                     last_seen TEXT NOT NULL,
                     detail TEXT
                 );
+
+                CREATE TABLE IF NOT EXISTS worker_shutdown_signals (
+                    worker_id TEXT PRIMARY KEY,
+                    created_at TEXT NOT NULL
+                );
                 """
             )
 
@@ -256,6 +261,33 @@ class GlobalStore:
                 """,
                 (service_name, utc_now(), detail[:500]),
             )
+
+    def signal_worker_shutdown(self, worker_id: str) -> None:
+        """Signal a worker to gracefully shut down."""
+        with self.connect() as conn:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO worker_shutdown_signals(worker_id, created_at)
+                VALUES(?, ?)
+                """,
+                (worker_id, utc_now()),
+            )
+
+    def check_shutdown_signal(self, worker_id: str) -> bool:
+        """Check if this worker has been signaled to shut down."""
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT 1 FROM worker_shutdown_signals WHERE worker_id = ?",
+                (worker_id,),
+            ).fetchone()
+            if row:
+                # Clear the signal
+                conn.execute(
+                    "DELETE FROM worker_shutdown_signals WHERE worker_id = ?",
+                    (worker_id,),
+                )
+                return True
+            return False
 
     def service_heartbeats(self) -> dict[str, sqlite3.Row]:
         with self.connect() as conn:
