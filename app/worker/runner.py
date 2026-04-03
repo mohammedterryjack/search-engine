@@ -23,14 +23,17 @@ def log_memory(label: str):
 
 
 def get_worker_id() -> str:
-    """Get a unique identifier for this worker instance."""
+    """Get a unique identifier for this parser instance."""
     hostname = socket.gethostname()
+    if hostname.startswith("search-engine-parser-"):
+        return hostname.replace("search-engine-", "")
+    # Legacy support for old worker names
     if hostname.startswith("search-engine-worker-"):
         return hostname.replace("search-engine-", "")
     container_id = os.environ.get("HOSTNAME", "")
     if container_id:
-        return f"worker-{container_id[:12]}"
-    return "worker-unknown"
+        return f"parser-{container_id[:12]}"
+    return "parser-unknown"
 
 
 def ensure_docling_available() -> None:
@@ -38,7 +41,7 @@ def ensure_docling_available() -> None:
         from docling.document_converter import DocumentConverter  # type: ignore
     except Exception as exc:
         raise RuntimeError(
-            "Worker startup failed because Docling is not installed or could not be imported."
+            "Parser startup failed because Docling is not installed or could not be imported."
         ) from exc
 
     _ = DocumentConverter
