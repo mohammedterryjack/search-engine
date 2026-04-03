@@ -77,14 +77,13 @@ def build_docling_converter():
             "Docling is required for ingestion but is not available in the worker environment."
         ) from exc
 
-    # Configure RapidOCR with thread settings for better performance
-    # intra_op_num_threads: threads within each operator (default -1 uses all cores)
-    # inter_op_num_threads: threads for parallelizing operations (default -1)
+    # Configure RapidOCR with ONNX Runtime backend and thread settings
+    # backend="onnxruntime": Force ONNX Runtime instead of PyTorch (PyTorch loads 770 weights per doc)
+    # EngineConfig.onnxruntime.intra_op_num_threads: threads within each operator (default -1 uses all cores)
     rapidocr_options = RapidOcrOptions(
+        backend="onnxruntime",
         rapidocr_params={
-            "Det": {"intra_op_num_threads": 4},
-            "Cls": {"intra_op_num_threads": 4},
-            "Rec": {"intra_op_num_threads": 4},
+            "EngineConfig.onnxruntime.intra_op_num_threads": 4,
         }
     )
 

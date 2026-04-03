@@ -108,6 +108,7 @@
     {% endfor %}
 
     {% for job in all_jobs[:20] %}
+    {% if job.status in ['pending', 'failed'] %}
     <div class="job-row">
       <span class="job-status job-{{ job.status }}">{{ job.status }}</span>
       <div class="job-detail">
@@ -120,8 +121,9 @@
         {% endif %}
       </div>
     </div>
+    {% endif %}
     {% else %}
-    <div class="job-row muted">No jobs yet.</div>
+    <div class="job-row muted">No pending or failed jobs.</div>
     {% endfor %}
   </section>
 
@@ -142,15 +144,15 @@
             {{ item.document.record.filename }}
           </a>
         </div>
-        <div class="document-meta">{{ item.document.record.source_path }}</div>
-        <div class="document-meta document-unit-stats">
+        <div class="document-meta" style="font-size: 0.85em;">{{ item.document.record.source_path }}</div>
+        <div class="document-meta document-unit-stats" style="font-size: 0.85em;">
           <span>{{ item.document.unit_counts.section }} sections</span>
           <span>{{ item.document.unit_counts.figure }} figures</span>
           <span>{{ item.document.unit_counts.table }} tables</span>
         </div>
       </div>
       <form action="/sources/{{ item.source_id }}/documents/{{ item.document.record.id }}/delete" method="post">
-        <button type="submit" class="text-button">Remove</button>
+        <button type="submit" class="icon-button danger-icon" title="Remove document">&#x1F5D1;</button>
       </form>
     </div>
     {% else %}
