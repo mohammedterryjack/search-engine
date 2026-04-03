@@ -12,8 +12,11 @@ SearChi is a local document search engine with:
 ## Services
 
 - `web`: FastAPI UI and API
-- `worker`: background ingestion loop
-- `reranker`: cross-encoder reranking service
+- `parser`: background document parsing (Docling + RapidOCR)
+- `summariser`: text summarization API (Falconsai T5)
+- `reranker`: cross-encoder reranking service (MiniLM-L4)
+
+See [MODELS.md](MODELS.md) for detailed model information.
 
 ## Local development
 
