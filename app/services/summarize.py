@@ -20,6 +20,7 @@ def summarize_single_result_stream(text: str):
         "text": truncated_text,
         "max_length": 150,  # ~2-3 sentences
         "min_length": 20,
+        "stream": True,
     }
 
     try:
@@ -30,11 +31,12 @@ def summarize_single_result_stream(text: str):
             headers={"Content-Type": "application/json; charset=utf-8"},
         )
         with urllib.request.urlopen(request, timeout=settings.summarizer_timeout) as response:
-            result = json.loads(response.read().decode("utf-8"))
-            summary = result.get("summary", "")
-            if summary:
-                # Return summary all at once (no streaming from HF pipeline by default)
-                yield summary
+            # Stream chunks as they arrive
+            while True:
+                chunk = response.read(64)  # Read in small chunks
+                if not chunk:
+                    break
+                yield chunk.decode("utf-8")
     except Exception as exc:
         print(f"Summarizer error: {exc}")
         return

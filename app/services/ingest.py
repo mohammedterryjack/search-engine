@@ -95,9 +95,10 @@ def build_docling_converter():
         # - images_scale=1.0: Reduce from default 2.0 (Issue #3216)
         # - generate_parsed_pages=False: Don't keep parsed pages in memory (Issue #2540)
         # - generate_page_images=False: Skip page image generation to save memory
+        # - generate_picture_images=False: Don't pre-extract pictures (we extract from markdown instead)
         # - ocr_options: Configure RapidOCR threading
         pipeline_options = ThreadedPdfPipelineOptions(
-            generate_picture_images=True,
+            generate_picture_images=False,
             images_scale=1.0,
             generate_parsed_pages=False,
             generate_page_images=False,
@@ -108,7 +109,7 @@ def build_docling_converter():
             from docling.datamodel.pipeline_options import PdfPipelineOptions
 
             pipeline_options = PdfPipelineOptions(
-                generate_picture_images=True,
+                generate_picture_images=False,
                 images_scale=1.0,
                 generate_parsed_pages=False,
                 generate_page_images=False,
