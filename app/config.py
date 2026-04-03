@@ -54,7 +54,7 @@ def get_settings() -> Settings:
     poll_seconds = float(os.getenv("SEARCHY_POLL_SECONDS", "3"))
     enable_summarizer = os.getenv("SEARCHY_ENABLE_SUMMARIZER", "1") == "1"
     summarizer_url = os.getenv("SEARCHY_SUMMARIZER_URL", "http://localhost:11434")
-    summarizer_model = os.getenv("SEARCHY_SUMMARIZER_MODEL", "qwen2.5:0.5b-instruct")
+    summarizer_model = os.getenv("SEARCHY_SUMMARIZER_MODEL", "Falconsai/text_summarization")
     summarizer_timeout = float(os.getenv("SEARCHY_SUMMARIZER_TIMEOUT", "180.0"))
 
     return Settings(
