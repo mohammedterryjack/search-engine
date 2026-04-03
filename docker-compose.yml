@@ -7,6 +7,7 @@ services:
     volumes:
       - .:/app
       - ${HOME}/.searchi:/searchi_data
+      - ${HOME}/.searchi/model_cache:/root/.cache
       - /Users:/Users:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
@@ -20,6 +21,7 @@ services:
       SEARCHY_STATUS_TOKEN: searchi-local-status
       SEARCHY_ENABLE_RERANKER: "1"
       SEARCHY_SUMMARIZER_URL: http://summariser:11434
+      HF_HOME: /root/.cache/huggingface
     depends_on:
       reranker:
         condition: service_started
@@ -33,6 +35,7 @@ services:
     volumes:
       - .:/app
       - ${HOME}/.searchi:/searchi_data
+      - ${HOME}/.searchi/model_cache:/root/.cache
       - /Users:/Users:ro
     environment:
       SEARCHY_DATA_DIR: /searchi_data
@@ -43,6 +46,7 @@ services:
       SEARCHY_ENABLE_VECTOR_RETRIEVAL: "1"
       SEARCHY_STATUS_TOKEN: searchi-local-status
       SEARCHY_POLL_SECONDS: "3"
+      HF_HOME: /root/.cache/huggingface
     deploy:
       replicas: 3
       resources:
