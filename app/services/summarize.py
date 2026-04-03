@@ -18,8 +18,8 @@ def summarize_single_result_stream(text: str):
 
     payload = {
         "text": truncated_text,
-        "max_length": 50,  # ~10-12 words
-        "min_length": 10,
+        "max_length": 150,  # ~2-3 sentences
+        "min_length": 20,
     }
 
     try:
