@@ -70,11 +70,13 @@ services:
     volumes:
       - .:/app
       - ${HOME}/.searchi:/searchi_data
+      - ${HOME}/.searchi/model_cache:/root/.cache
     environment:
       SEARCHY_ENABLE_RERANKER: "0"
       SEARCHY_STATUS_TOKEN: searchi-local-status
       SEARCHY_RERANKER_MODEL: cross-encoder/ms-marco-MiniLM-L4-v2
       SEARCHY_RERANKER_BATCH_SIZE: "16"
+      HF_HOME: /root/.cache/huggingface
 
   summariser:
     build: .
