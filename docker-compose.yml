@@ -48,13 +48,13 @@ services:
       SEARCHY_POLL_SECONDS: "3"
       HF_HOME: /root/.cache/huggingface
     deploy:
-      replicas: 2
+      replicas: 1
       labels:
         - "searchi.service=parser"
         - "searchi.model=docling"
       resources:
         limits:
-          memory: 8G
+          memory: 24G
         reservations:
           memory: 1G
     depends_on:

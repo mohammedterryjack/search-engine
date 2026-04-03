@@ -32,6 +32,10 @@ HTML_IMAGE_RE = re.compile(r"<img[^>]*>", re.IGNORECASE)
 
 
 def extract_image_data(text: str) -> tuple[str | None, str | None]:
+    """Extract and downscale image data from markdown base64 strings.
+
+    Downscales images to max 800px width to reduce database size and improve UI performance.
+    """
     if not text:
         return None, None
     match = DATA_IMAGE_RE.search(text)
@@ -41,8 +45,34 @@ def extract_image_data(text: str) -> tuple[str | None, str | None]:
     mime = match.group("mime")
     if not data:
         return None, None
-    # Image scaling is handled by Docling's images_scale=1.0 parameter
-    return mime, data
+
+    # Downscale image to reduce database size
+    try:
+        import base64
+        from io import BytesIO
+        from PIL import Image
+
+        # Decode base64 to image
+        image_bytes = base64.b64decode(data)
+        image = Image.open(BytesIO(image_bytes))
+
+        # Downscale if wider than 800px
+        max_width = 800
+        if image.width > max_width:
+            ratio = max_width / image.width
+            new_height = int(image.height * ratio)
+            image = image.resize((max_width, new_height), Image.Resampling.LANCZOS)
+
+        # Re-encode to base64
+        buffer = BytesIO()
+        image_format = image.format or 'PNG'
+        image.save(buffer, format=image_format, optimize=True, quality=85)
+        downscaled_data = base64.b64encode(buffer.getvalue()).decode('utf-8')
+
+        return mime, downscaled_data
+    except Exception:
+        # If downscaling fails, return original
+        return mime, data
 
 
 def strip_image_markup(text: str) -> str:
