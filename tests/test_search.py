@@ -254,6 +254,7 @@ def test_lexical_search_respects_unit_type_filter(tmp_path: Path) -> None:
 
     assert len(results) == 1
     assert results[0].unit_type == "figure"
+    assert results[0].text_content == "chaos attractor"
 
 
 def test_semantic_search_respects_unit_type_filter(monkeypatch, tmp_path: Path) -> None:

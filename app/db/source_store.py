@@ -57,7 +57,6 @@ class SourceStore:
                     anchor_key TEXT NOT NULL,
                     text_content TEXT NOT NULL,
                     caption TEXT NOT NULL,
-                    display_text TEXT NOT NULL,
                     token_count INTEGER NOT NULL,
                     image_mime TEXT,
                     image_data TEXT,
@@ -181,9 +180,9 @@ class SourceStore:
                     """
                     INSERT INTO content_units(
                         document_id, unit_type, page_number, section_name, anchor_key,
-                        text_content, caption, display_text, token_count, created_at,
+                        text_content, caption, token_count, created_at,
                         image_mime, image_data
-                    ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         document_id,
@@ -193,7 +192,6 @@ class SourceStore:
                         unit["anchor_key"],
                         unit["text_content"],
                         unit["caption"],
-                        unit["display_text"],
                         unit["token_count"],
                         unit["created_at"],
                         image_mime,
@@ -303,12 +301,12 @@ class SourceStore:
         with self.connect() as conn:
             rows = conn.execute(
                 """
-                SELECT id, display_text
+                SELECT id, text_content
                 FROM content_units
                 ORDER BY id ASC
                 """
             ).fetchall()
-        return [(int(row["id"]), str(row["display_text"])) for row in rows]
+        return [(int(row["id"]), str(row["text_content"])) for row in rows]
 
     def content_units_by_ids(self, content_unit_ids: list[int]) -> list[sqlite3.Row]:
         if not content_unit_ids:
@@ -322,7 +320,8 @@ class SourceStore:
                        cu.unit_type,
                        cu.page_number,
                        cu.section_name,
-                       cu.display_text,
+                       cu.text_content,
+                       cu.caption,
                        cu.image_mime,
                        cu.image_data,
                        cu.token_count,
@@ -346,7 +345,8 @@ class SourceStore:
                     cu.unit_type,
                     cu.page_number,
                     cu.section_name,
-                    cu.display_text,
+                    cu.text_content,
+                    cu.caption,
                     cu.image_mime,
                     cu.image_data,
                     d.source_path AS document_path,
@@ -372,14 +372,14 @@ class SourceStore:
         with self.connect() as conn:
             rows = conn.execute(
                 """
-                SELECT id, display_text
+                SELECT id, text_content
                 FROM content_units
                 WHERE document_id = ?
                 ORDER BY id ASC
                 """,
                 (document_id,),
             ).fetchall()
-        return [(int(row["id"]), str(row["display_text"])) for row in rows]
+        return [(int(row["id"]), str(row["text_content"])) for row in rows]
 
     def stats(self) -> dict[str, object]:
         with self.connect() as conn:

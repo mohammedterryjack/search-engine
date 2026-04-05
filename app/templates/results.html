@@ -112,7 +112,7 @@
           <button
             class="result-summarize-btn"
             data-summarize-result
-            data-result-text="{{ result.display_text|e }}"
+            data-result-text="{{ (result.text_content or result.display_text)|e }}"
             title="summarise"
             aria-label="summarise"
           >✨</button>

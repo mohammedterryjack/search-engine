@@ -59,7 +59,7 @@
           <button
             class="result-summarize-btn"
             data-summarize-result
-            data-result-text="${escapeHtml(result.display_text || '')}"
+            data-result-text="${escapeHtml(result.text_content || result.display_text || '')}"
             title="summarise"
             aria-label="summarise"
           >✨</button>

@@ -23,6 +23,7 @@ from app.db.global_store import GlobalStore
 from app.db.source_store import SourceStore
 from app.services.ingest import list_supported_documents
 from app.models import SearchResponse, SearchResult
+from app.services.content_units import display_text_for_unit
 from app.services.search import SearchPipelineError, search_all_sources
 from app.services.vector_store import (
     faiss_path_for_db,
@@ -687,10 +688,16 @@ def _get_document_sections(source_root_id: int, document_id: int) -> tuple[list[
             unit_type=str(row["unit_type"]),
             page_number=int(row["page_number"]) if row["page_number"] is not None else None,
             section_name=str(row["section_name"]) if row["section_name"] is not None else "",
-            display_text=str(row["display_text"]) if row["display_text"] is not None else "",
+            display_text=display_text_for_unit(
+                unit_type=str(row["unit_type"]),
+                text_content=str(row["text_content"]) if row["text_content"] is not None else "",
+                caption=str(row["caption"]) if row["caption"] is not None else "",
+                section_name=str(row["section_name"]) if row["section_name"] is not None else "",
+            ),
             image_mime=row["image_mime"],
             image_data=row["image_data"],
             score=0.0,
+            text_content=str(row["text_content"]) if row["text_content"] is not None else "",
         )
         for row in rows
     ]

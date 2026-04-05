@@ -8,6 +8,7 @@ from typing import Any
 
 from app.db.global_store import utc_now
 from app.config import get_settings
+from app.services.content_units import display_text_for_unit
 from app.services.tokenize import term_frequencies
 
 
@@ -166,9 +167,17 @@ class ParsedUnit:
     anchor_key: str
     text_content: str
     caption: str
-    display_text: str
     image_mime: str | None = None
     image_data: str | None = None
+
+    @property
+    def display_text(self) -> str:
+        return display_text_for_unit(
+            unit_type=self.unit_type,
+            text_content=self.text_content,
+            caption=self.caption,
+            section_name=self.section_name,
+        )
 
 
 def list_supported_documents(source_path: Path) -> list[Path]:
@@ -255,7 +264,6 @@ def extract_structured_units(doc: Any) -> list[ParsedUnit]:
                 anchor_key=anchor,
                 text_content=body,
                 caption="",
-                display_text=body,
             )
         )
         section_buffer = []
@@ -307,20 +315,14 @@ def extract_structured_units(doc: Any) -> list[ParsedUnit]:
                 picture_text = markdown_from_item(item, doc)
                 cleaned_picture_text = strip_image_markup(picture_text)
                 image_mime, image_data = extract_image_data(picture_text)
-                display = build_display_text(
-                    caption,
-                    cleaned_picture_text,
-                    fallback=f"Figure in {current_section}",
-                )
                 units.append(
                     ParsedUnit(
                         unit_type="figure",
                         page_number=page_number,
                         section_name=current_section,
                         anchor_key=anchor_from_ref(item_ref),
-                        text_content=display,
+                        text_content=cleaned_picture_text,
                         caption=caption,
-                        display_text=display,
                         image_mime=image_mime,
                         image_data=image_data,
                     )
@@ -330,7 +332,6 @@ def extract_structured_units(doc: Any) -> list[ParsedUnit]:
             if label == "table":
                 caption = caption_from_item(item, doc)
                 table_text = table_text_from_item(item, doc)
-                display = build_display_text(caption, table_text, fallback=f"Table in {current_section}")
                 units.append(
                     ParsedUnit(
                         unit_type="table",
@@ -339,7 +340,6 @@ def extract_structured_units(doc: Any) -> list[ParsedUnit]:
                         anchor_key=anchor_from_ref(item_ref),
                         text_content=table_text,
                         caption=caption,
-                        display_text=display,
                     )
                     )
 
@@ -423,21 +423,11 @@ def anchor_from_ref(item_ref: str) -> str:
     return anchor or "item"
 
 
-def build_display_text(caption: str, body: str, fallback: str) -> str:
-    if caption and body:
-        return f"{caption}\n\n{body}".strip()
-    if caption:
-        return caption
-    if body:
-        return body
-    return fallback
-
-
 def build_units(parsed_units: list[ParsedUnit]) -> list[dict[str, object]]:
     settings = get_settings()
     units: list[dict[str, object]] = []
     for unit in parsed_units:
-        terms = term_frequencies(unit.display_text)
+        terms = term_frequencies(unit.text_content)
         units.append(
             {
                 "unit_type": unit.unit_type,
@@ -446,7 +436,6 @@ def build_units(parsed_units: list[ParsedUnit]) -> list[dict[str, object]]:
                 "anchor_key": unit.anchor_key,
                 "text_content": unit.text_content,
                 "caption": unit.caption,
-                "display_text": unit.display_text,
                 "token_count": sum(terms.values()),
                 "terms": dict(terms),
                 "embedding_model": settings.vector_model_name,
@@ -471,7 +460,6 @@ def _merge_sections(units: list[ParsedUnit]) -> list[ParsedUnit]:
         key = _normalize_section_name(unit.section_name)
         if prev is not None and prev_key == key:
             prev.text_content = _join_text(prev.text_content, unit.text_content)
-            prev.display_text = _join_text(prev.display_text, unit.display_text)
             prev.caption = _join_text(prev.caption, unit.caption)
             prev.anchor_key = prev.anchor_key or unit.anchor_key
             continue

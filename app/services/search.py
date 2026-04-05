@@ -11,6 +11,7 @@ from app.config import get_settings
 from app.db.global_store import GlobalStore
 from app.db.source_store import SourceStore
 from app.models import SearchResponse, SearchResult
+from app.services.content_units import display_text_for_unit
 from app.services.tokenize import normalized_terms
 from app.services.vector_store import VectorStoreError, query_faiss_index
 
@@ -148,7 +149,8 @@ def lexical_search_source_db(
                 cu.unit_type,
                 cu.page_number,
                 cu.section_name,
-                cu.display_text,
+                cu.caption,
+                cu.text_content,
                 cu.image_mime,
                 cu.image_data,
                 cu.token_count,
@@ -179,7 +181,8 @@ def lexical_search_source_db(
                 "unit_type": str(row["unit_type"]),
                 "page_number": row["page_number"],
                 "section_name": str(row["section_name"]) if row["section_name"] is not None else "",
-                "display_text": str(row["display_text"]) if row["display_text"] is not None else "",
+                "caption": str(row["caption"]) if row["caption"] is not None else "",
+                "text_content": str(row["text_content"]) if row["text_content"] is not None else "",
                 "document_path": str(row["document_path"]),
                 "filename": str(row["filename"]),
                 "token_count": int(row["token_count"]),
@@ -211,8 +214,14 @@ def lexical_search_source_db(
                 unit_type=str(entry["unit_type"]),
                 page_number=int(entry["page_number"]) if entry["page_number"] is not None else None,
                 section_name=str(entry["section_name"]),
-                display_text=str(entry["display_text"]),
+                display_text=display_text_for_unit(
+                    unit_type=str(entry["unit_type"]),
+                    text_content=str(entry["text_content"]),
+                    caption=str(entry["caption"]),
+                    section_name=str(entry["section_name"]),
+                ),
                 score=score,
+                text_content=str(entry["text_content"]),
                 image_mime=entry["image_mime"],
                 image_data=entry["image_data"],
             )
@@ -263,8 +272,14 @@ def semantic_search_source_db(
                     unit_type=str(row["unit_type"]),
                     page_number=int(row["page_number"]) if row["page_number"] is not None else None,
                     section_name=str(row["section_name"]) if row["section_name"] is not None else "",
-                    display_text=str(row["display_text"]) if row["display_text"] is not None else "",
+                    display_text=display_text_for_unit(
+                        unit_type=str(row["unit_type"]),
+                        text_content=str(row["text_content"]) if row["text_content"] is not None else "",
+                        caption=str(row["caption"]) if row["caption"] is not None else "",
+                        section_name=str(row["section_name"]) if row["section_name"] is not None else "",
+                    ),
                     score=float(score),
+                    text_content=str(row["text_content"]) if row["text_content"] is not None else "",
                     image_mime=row["image_mime"],
                     image_data=row["image_data"],
                 )
@@ -345,7 +360,7 @@ def rerank_results(query: str, results: list[SearchResult]) -> tuple[list[Search
         "results": [
             {
                 "content_unit_id": result.content_unit_id,
-                "display_text": result.display_text,
+                "text_content": result.text_content or "",
                 "score": result.score,
             }
             for result in results

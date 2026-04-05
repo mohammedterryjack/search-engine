@@ -60,7 +60,7 @@ async def rerank(request: Request) -> list[dict[str, float | int]]:
         return []
 
     model = get_model()
-    pairs = [(query, str(item["display_text"])) for item in results]
+    pairs = [(query, str(item.get("text_content", ""))) for item in results]
     scores = model.predict(pairs, batch_size=BATCH_SIZE, show_progress_bar=False)
 
     reranked = []
