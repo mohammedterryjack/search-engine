@@ -54,6 +54,9 @@ async def summarize(request: SummarizeRequest):
     try:
         inputs = tokenizer(text, return_tensors="pt", max_length=512, truncation=True)
 
+        eos_id = tokenizer.eos_token_id
+        pad_id = tokenizer.eos_token_id if tokenizer.pad_token_id is None else tokenizer.pad_token_id
+
         if request.stream:
             # Streaming response using TextIteratorStreamer
             streamer = TextIteratorStreamer(tokenizer, skip_prompt=True, skip_special_tokens=True)
@@ -63,6 +66,8 @@ async def summarize(request: SummarizeRequest):
                 "min_length": request.min_length,
                 "num_beams": 1,  # Streaming only works with greedy/sampling (num_beams=1)
                 "early_stopping": True,
+                "eos_token_id": eos_id,
+                "pad_token_id": pad_id,
                 "streamer": streamer,
             }
             thread = Thread(target=model.generate, kwargs=generation_kwargs)
@@ -82,6 +87,8 @@ async def summarize(request: SummarizeRequest):
                 min_length=request.min_length,
                 num_beams=4,
                 early_stopping=True,
+                eos_token_id=eos_id,
+                pad_token_id=pad_id,
             )
             summary = tokenizer.decode(summary_ids[0], skip_special_tokens=True)
             return {"summary": summary}
