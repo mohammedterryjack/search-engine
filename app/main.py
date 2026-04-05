@@ -582,10 +582,12 @@ def get_docker_workers() -> list[dict[str, str]]:
     try:
         import docker
         client = docker.from_env()
-        containers = client.containers.list(filters={"name": "worker"})
+        containers = client.containers.list()
 
         workers = []
         for container in containers:
+            if not any(keyword in container.name for keyword in ("worker", "parser")):
+                continue
             name = container.name.replace("search-engine-", "")
             status = container.status  # 'running', 'exited', etc.
             # Get uptime from container stats
