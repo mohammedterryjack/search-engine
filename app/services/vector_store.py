@@ -11,13 +11,22 @@ from sentence_transformers import SentenceTransformer
 from app.config import get_settings
 
 
+class VectorStoreError(RuntimeError):
+    pass
+
+
 @lru_cache(maxsize=1)
 def get_embedding_model() -> SentenceTransformer:
     settings = get_settings()
     device = os.getenv("SEARCHY_VECTOR_DEVICE")
-    if device:
-        return SentenceTransformer(settings.vector_model_name, device=device)
-    return SentenceTransformer(settings.vector_model_name)
+    try:
+        if device:
+            return SentenceTransformer(settings.vector_model_name, device=device)
+        return SentenceTransformer(settings.vector_model_name)
+    except Exception as exc:
+        raise VectorStoreError(
+            f"Failed to load embedding model '{settings.vector_model_name}'."
+        ) from exc
 
 
 def faiss_path_for_db(db_path: Path) -> Path:
@@ -25,14 +34,19 @@ def faiss_path_for_db(db_path: Path) -> Path:
 
 
 def embed_texts(texts: list[str]) -> np.ndarray:
-    model = get_embedding_model()
-    vectors = model.encode(
-        texts,
-        normalize_embeddings=True,
-        convert_to_numpy=True,
-        show_progress_bar=False,
-    )
-    return np.asarray(vectors, dtype=np.float32)
+    try:
+        model = get_embedding_model()
+        vectors = model.encode(
+            texts,
+            normalize_embeddings=True,
+            convert_to_numpy=True,
+            show_progress_bar=False,
+        )
+        return np.asarray(vectors, dtype=np.float32)
+    except VectorStoreError:
+        raise
+    except Exception as exc:
+        raise VectorStoreError("Failed to embed text for semantic search.") from exc
 
 
 def rebuild_faiss_index(db_path: Path, rows: list[tuple[int, str]]) -> None:
@@ -112,15 +126,20 @@ def faiss_reconciliation_report(db_path: Path, expected_rows: list[tuple[int, st
 
 
 def query_faiss_index(db_path: Path, query: str, limit: int = 100) -> list[tuple[int, float]]:
-    index_path = faiss_path_for_db(db_path)
-    if not index_path.exists():
-        return []
-    index = faiss.read_index(str(index_path))
-    query_vector = embed_texts([query])
-    scores, ids = index.search(query_vector, limit)
-    results: list[tuple[int, float]] = []
-    for content_unit_id, score in zip(ids[0], scores[0], strict=True):
-        if int(content_unit_id) == -1:
-            continue
-        results.append((int(content_unit_id), float(score)))
-    return results
+    try:
+        index_path = faiss_path_for_db(db_path)
+        if not index_path.exists():
+            return []
+        index = faiss.read_index(str(index_path))
+        query_vector = embed_texts([query])
+        scores, ids = index.search(query_vector, limit)
+        results: list[tuple[int, float]] = []
+        for content_unit_id, score in zip(ids[0], scores[0], strict=True):
+            if int(content_unit_id) == -1:
+                continue
+            results.append((int(content_unit_id), float(score)))
+        return results
+    except VectorStoreError:
+        raise
+    except Exception as exc:
+        raise VectorStoreError("Failed to query the semantic index.") from exc

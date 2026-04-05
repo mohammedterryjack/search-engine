@@ -68,10 +68,23 @@
         <div class="stat-label">Failed jobs</div>
         <div class="stat-value">{{ job_counts.failed }}</div>
       </div>
-      <div class="stat-tile {{ 'status-ok' if vector_enabled else 'status-neutral' }}">
-        <div class="stat-label">Vector retrieval</div>
-        <div class="stat-value">{{ "Enabled" if vector_enabled else "Disabled" }}</div>
+      <div class="stat-tile {{ 'status-ok' if vector_health.status == 'ok' else 'status-bad' if vector_health.status == 'error' else 'status-neutral' }}">
+        <div class="stat-label">Vector model</div>
+        <div class="stat-value">
+          {% if vector_health.status == 'disabled' %}
+          Disabled
+          {% elif vector_health.status == 'ok' %}
+          Ready
+          {% else %}
+          Error
+          {% endif %}
+        </div>
         <div class="small-status">{{ vector_model_name }}</div>
+        {% if vector_health.device %}
+        <div class="small-status">{{ vector_health.device }}</div>
+        {% elif vector_health.error %}
+        <div class="small-status">{{ vector_health.error }}</div>
+        {% endif %}
       </div>
       <div class="stat-tile {{ 'status-ok' if reranker_health.status == 'ok' else 'status-bad' if reranker_health.status == 'error' else 'status-neutral' }}">
         <div class="stat-label">Reranker</div>

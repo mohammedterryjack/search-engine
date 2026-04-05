@@ -14,6 +14,7 @@ from app.services.search import (
     search_all_sources,
     semantic_search_source_db,
 )
+from app.services.vector_store import VectorStoreError
 from app.services.tokenize import term_frequencies
 
 
@@ -315,6 +316,53 @@ def test_semantic_search_respects_unit_type_filter(monkeypatch, tmp_path: Path) 
     assert warning is None
     assert len(results) == 1
     assert results[0].unit_type == "figure"
+
+
+def test_semantic_search_falls_back_when_vector_store_fails(monkeypatch, tmp_path: Path) -> None:
+    doc_path = tmp_path / "paper.pdf"
+    doc_path.write_text("placeholder")
+    store = SourceStore(tmp_path / "source.sqlite3")
+    document_id = store.upsert_document(
+        document_path=doc_path,
+        status="indexed",
+        page_count=1,
+        created_at=utc_now(),
+        updated_at=utc_now(),
+    )
+    store.replace_content_units(
+        document_id,
+        [
+            {
+                "unit_type": "section",
+                "page_number": 1,
+                "section_name": "Chaos",
+                "anchor_key": "section-1",
+                "text_content": "chaos attractor",
+                "caption": "",
+                "display_text": "chaos attractor",
+                "token_count": 2,
+                "created_at": utc_now(),
+                "terms": term_frequencies("chaos attractor"),
+                "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+            }
+        ],
+    )
+
+    monkeypatch.setattr(
+        "app.services.search.query_faiss_index",
+        lambda _db_path, _query, limit=300: (_ for _ in ()).throw(VectorStoreError("bad cache")),
+    )
+
+    results, warning = semantic_search_source_db(
+        source_root_id=1,
+        source_path="/src",
+        db_path=store.db_path,
+        query="chaos system",
+        vector_min_score=0.0,
+    )
+
+    assert results == []
+    assert warning == "Semantic search is temporarily unavailable. Showing lexical results only."
 
 
 def test_search_all_sources_filters_unit_types(monkeypatch, tmp_path: Path) -> None:

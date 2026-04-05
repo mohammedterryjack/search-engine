@@ -27,8 +27,10 @@ from app.services.search import SearchPipelineError, search_all_sources
 from app.services.vector_store import (
     faiss_path_for_db,
     faiss_reconciliation_report,
+    get_embedding_model,
     rebuild_faiss_index,
     update_faiss_index,
+    VectorStoreError,
 )
 from app.ui import highlight_terms, truncate_text
 
@@ -192,6 +194,25 @@ def summarizer_health() -> dict[str, object]:
         }
     except (urllib.error.URLError, TimeoutError, ValueError) as exc:
         return {"status": "error", "error": str(exc)}
+
+
+def vector_health() -> dict[str, object]:
+    if not settings.enable_vector_retrieval:
+        return {"status": "disabled", "model_name": settings.vector_model_name}
+    try:
+        model = get_embedding_model()
+        device = getattr(model, "device", None)
+        return {
+            "status": "ok",
+            "model_name": settings.vector_model_name,
+            "device": str(device) if device is not None else "",
+        }
+    except VectorStoreError as exc:
+        return {
+            "status": "error",
+            "model_name": settings.vector_model_name,
+            "error": str(exc),
+        }
 
 
 def ensure_runtime_dirs() -> None:
@@ -439,6 +460,7 @@ async def sources_view(
 async def status_view(request: Request) -> HTMLResponse:
     store = GlobalStore()
     source_rows = store.list_source_roots()
+    current_vector_health = vector_health()
     total_documents = 0
     total_content_units = 0
     total_embeddings = 0
@@ -486,6 +508,7 @@ async def status_view(request: Request) -> HTMLResponse:
             "summarizer_health": summarizer_health(),
             "vector_model_name": settings.vector_model_name,
             "vector_enabled": settings.enable_vector_retrieval,
+            "vector_health": current_vector_health,
             "reranker_enabled": settings.enable_reranker,
             "poll_seconds": settings.poll_seconds,
             "web_status": "ok",

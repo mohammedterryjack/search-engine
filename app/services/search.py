@@ -12,7 +12,7 @@ from app.db.global_store import GlobalStore
 from app.db.source_store import SourceStore
 from app.models import SearchResponse, SearchResult
 from app.services.tokenize import normalized_terms
-from app.services.vector_store import query_faiss_index
+from app.services.vector_store import VectorStoreError, query_faiss_index
 
 class SearchPipelineError(RuntimeError):
     """Raised when an enabled search stage fails."""
@@ -231,7 +231,10 @@ def semantic_search_source_db(
     vector_min_score: float | None = None,
 ) -> tuple[list[SearchResult], str | None]:
     store = SourceStore(db_path)
-    vector_hits = query_faiss_index(db_path, query, limit=300)
+    try:
+        vector_hits = query_faiss_index(db_path, query, limit=300)
+    except VectorStoreError:
+        return [], "Semantic search is temporarily unavailable. Showing lexical results only."
     if not vector_hits:
         return [], None
     effective_min_score = vector_min_score if vector_min_score is not None else float("-inf")
