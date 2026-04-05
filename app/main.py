@@ -178,18 +178,17 @@ def summarizer_health() -> dict[str, object]:
         return {"status": "disabled"}
     try:
         request = urllib.request.Request(
-            f"{settings.summarizer_url}/api/tags",
+            f"{settings.summarizer_url}/health",
         )
         with urllib.request.urlopen(request, timeout=2) as response:
             payload = response.read().decode("utf-8")
         import json
 
         data = json.loads(payload)
-        models = data.get("models", [])
-        found = any(m.get("name") == settings.summarizer_model for m in models)
+        raw_status = str(data.get("status", "ok"))
         return {
-            "status": "ok" if found else "model-missing",
-            "model_name": settings.summarizer_model,
+            "status": "ok" if raw_status in {"ok", "healthy"} else raw_status,
+            "model_name": str(data.get("model", settings.summarizer_model)),
             "url": settings.summarizer_url,
         }
     except (urllib.error.URLError, TimeoutError, ValueError) as exc:

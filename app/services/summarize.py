@@ -12,12 +12,8 @@ def summarize_single_result_stream(text: str):
     if not settings.enable_summarizer or not text:
         return
 
-    # Truncate text to reasonable length for summarization
-    max_chars = 2000
-    truncated_text = text[:max_chars]
-
     payload = {
-        "text": truncated_text,
+        "text": text,
         "max_length": 150,  # ~2-3 sentences
         "min_length": 20,
         "stream": True,
