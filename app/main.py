@@ -10,6 +10,7 @@ import urllib.request
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from time import perf_counter
 from urllib.parse import urlencode
 
 from fastapi import FastAPI, HTTPException, Request
@@ -50,6 +51,7 @@ def nl2br(value: str | None) -> str:
     return Markup(escaped.replace("\n", "<br>\n"))
 
 
+logger = logging.getLogger(__name__)
 settings = get_settings()
 app = FastAPI(title="SearChi")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
@@ -471,6 +473,7 @@ async def api_ai_search(payload: SearchApiRequest) -> StreamingResponse:
             yield _sse_event({"type": "warning", "warning": search_response.warning})
 
         source_payload, source_refs = _build_ai_source_payload(search_response.results)
+        ts_sources = perf_counter()
         if source_refs:
             yield _sse_event(
                 {
@@ -490,8 +493,12 @@ async def api_ai_search(payload: SearchApiRequest) -> StreamingResponse:
             return
 
         yielded = False
+        first_answer = True
         for chunk in answer_search_results_stream(query, source_payload) or ():
             yielded = True
+            if first_answer:
+                logger.info("ai-search: first answer chunk in %.3fs", perf_counter() - ts_sources)
+                first_answer = False
             yield _sse_event({"type": "answer", "chunk": chunk})
         if not yielded:
             yield _sse_event(

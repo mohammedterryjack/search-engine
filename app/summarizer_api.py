@@ -14,7 +14,8 @@ from pydantic import BaseModel
 logger = logging.getLogger(__name__)
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama:11434").rstrip("/")
-OLLAMA_MODEL = os.getenv("SEARCHY_SUMMARIZER_MODEL", "qwen3.5:0.8b")
+SUMMARY_MODEL = os.getenv("SEARCHY_SUMMARY_MODEL", "qwen2.5:0.5b-instruct")
+AI_MODEL = os.getenv("SEARCHY_AI_MODEL", "qwen3.5:0.8b")
 OLLAMA_TIMEOUT = float(os.getenv("SEARCHY_SUMMARIZER_TIMEOUT", "180.0"))
 OLLAMA_NUM_CTX = int(os.getenv("SEARCHY_SUMMARIZER_NUM_CTX", "32768"))
 
@@ -56,14 +57,15 @@ def _ollama_tags() -> dict[str, object]:
 def _model_available() -> bool:
     data = _ollama_tags()
     models = data.get("models", [])
-    return any(str(model.get("name", "")) == OLLAMA_MODEL for model in models if isinstance(model, dict))
+    available = {str(model.get("name", "")) for model in models if isinstance(model, dict)}
+    return SUMMARY_MODEL in available and AI_MODEL in available
 
 
-def _warm_model() -> None:
+def _warm_model(model_name: str) -> None:
     request = _ollama_request(
         "/api/chat",
         {
-            "model": OLLAMA_MODEL,
+            "model": model_name,
             "messages": [{"role": "user", "content": "Reply with OK."}],
             "stream": False,
             "options": {"num_predict": 8, "temperature": 0, "num_ctx": OLLAMA_NUM_CTX},
@@ -80,43 +82,35 @@ def _stream_generate(payload: dict[str, object]):
     # Avoid socket read timeouts during streamed generation; some models take a
     # while before yielding the first chunk, especially on cold starts.
     with urllib.request.urlopen(request) as response:
-        buffer = ""
-        while True:
-            chunk = response.read(1024)
-            if not chunk:
-                break
-            buffer += chunk.decode("utf-8")
-            while "\n" in buffer:
-                line, buffer = buffer.split("\n", 1)
-                line = line.strip()
-                if not line:
-                    continue
-                data = json.loads(line)
-                if data.get("error"):
-                    raise RuntimeError(str(data["error"]))
-                message = data.get("message", {})
-                text = str(message.get("content", "")) if isinstance(message, dict) else ""
-                if text:
-                    yield text
-                if data.get("done"):
-                    return
-        tail = buffer.strip()
-        if tail:
-            data = json.loads(tail)
+        for raw_line in response:
+            line = raw_line.decode("utf-8").strip()
+            if not line:
+                continue
+            data = json.loads(line)
             if data.get("error"):
                 raise RuntimeError(str(data["error"]))
             message = data.get("message", {})
             text = str(message.get("content", "")) if isinstance(message, dict) else ""
             if text:
                 yield text
+            if data.get("done"):
+                return
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Checking Ollama summarizer model %s at %s", OLLAMA_MODEL, OLLAMA_URL)
+    logger.info(
+        "Checking Ollama summary model %s and AI model %s at %s",
+        SUMMARY_MODEL,
+        AI_MODEL,
+        OLLAMA_URL,
+    )
     if not _model_available():
-        raise RuntimeError(f"Ollama model {OLLAMA_MODEL} is not available")
-    _warm_model()
+        raise RuntimeError(
+            f"Ollama models {SUMMARY_MODEL} and/or {AI_MODEL} are not available"
+        )
+    _warm_model(SUMMARY_MODEL)
+    _warm_model(AI_MODEL)
     yield
 
 
@@ -209,7 +203,7 @@ async def summarize(request: SummarizeRequest):
             user_message["images"] = [request.image_data]
             messages[1] = user_message
         payload = {
-            "model": OLLAMA_MODEL,
+            "model": SUMMARY_MODEL,
             "messages": messages,
             "stream": request.stream,
             "options": {
@@ -240,7 +234,7 @@ async def answer(request: AnswerRequest):
     try:
         messages = _build_answer_messages(request.question, request.sources)
         payload = {
-            "model": OLLAMA_MODEL,
+            "model": AI_MODEL,
             "messages": messages,
             "stream": request.stream,
             "options": {
@@ -270,7 +264,23 @@ async def answer(request: AnswerRequest):
 async def health():
     try:
         if _model_available():
-            return {"status": "healthy", "model": OLLAMA_MODEL}
-        return {"status": "model-missing", "model": OLLAMA_MODEL}
+            return {
+                "status": "healthy",
+                "model": f"summary={SUMMARY_MODEL}; answer={AI_MODEL}",
+                "summary_model": SUMMARY_MODEL,
+                "answer_model": AI_MODEL,
+            }
+        return {
+            "status": "model-missing",
+            "model": f"summary={SUMMARY_MODEL}; answer={AI_MODEL}",
+            "summary_model": SUMMARY_MODEL,
+            "answer_model": AI_MODEL,
+        }
     except (urllib.error.URLError, TimeoutError, ValueError) as exc:
-        return {"status": "error", "model": OLLAMA_MODEL, "error": str(exc)}
+        return {
+            "status": "error",
+            "model": f"summary={SUMMARY_MODEL}; answer={AI_MODEL}",
+            "summary_model": SUMMARY_MODEL,
+            "answer_model": AI_MODEL,
+            "error": str(exc),
+        }

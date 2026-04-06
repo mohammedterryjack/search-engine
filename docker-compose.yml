@@ -21,7 +21,8 @@ services:
       SEARCHY_STATUS_TOKEN: searchi-local-status
       SEARCHY_ENABLE_RERANKER: "1"
       SEARCHY_SUMMARIZER_URL: http://summariser:8020
-      SEARCHY_SUMMARIZER_MODEL: qwen3.5:0.8b
+      SEARCHY_SUMMARY_MODEL: qwen2.5:0.5b-instruct
+      SEARCHY_AI_MODEL: qwen3.5:0.8b
       SEARCHY_SUMMARIZER_NUM_CTX: "32768"
       SEARCHY_AI_SOURCE_LIMIT: "8"
       HF_HOME: /root/.cache/huggingface
@@ -49,7 +50,8 @@ services:
       SEARCHY_ENABLE_VECTOR_RETRIEVAL: "1"
       SEARCHY_STATUS_TOKEN: searchi-local-status
       SEARCHY_POLL_SECONDS: "3"
-      SEARCHY_SUMMARIZER_MODEL: qwen3.5:0.8b
+      SEARCHY_SUMMARY_MODEL: qwen2.5:0.5b-instruct
+      SEARCHY_AI_MODEL: qwen3.5:0.8b
       SEARCHY_SUMMARIZER_NUM_CTX: "32768"
       SEARCHY_AI_SOURCE_LIMIT: "8"
       HF_HOME: /root/.cache/huggingface
@@ -89,15 +91,16 @@ services:
     entrypoint: ["/bin/sh", "/app/scripts/init-ollama.sh"]
     labels:
       - "searchi.service=ollama"
-      - "searchi.model=qwen3.5:0.8b"
+      - "searchi.model=summary=qwen2.5:0.5b-instruct,answer=qwen3.5:0.8b"
     volumes:
       - .:/app
       - ${HOME}/.searchi/ollama:/root/.ollama
     environment:
       OLLAMA_HOST: 0.0.0.0:11434
-      SEARCHY_SUMMARIZER_MODEL: qwen3.5:0.8b
+      SEARCHY_SUMMARY_MODEL: qwen2.5:0.5b-instruct
+      SEARCHY_AI_MODEL: qwen3.5:0.8b
     healthcheck:
-      test: ["CMD-SHELL", "ollama list | grep -q \"^$$SEARCHY_SUMMARIZER_MODEL[[:space:]]\""]
+      test: ["CMD-SHELL", "ollama list | grep -q \"^$$SEARCHY_SUMMARY_MODEL[[:space:]]\" && ollama list | grep -q \"^$$SEARCHY_AI_MODEL[[:space:]]\""]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -108,14 +111,15 @@ services:
     command: uvicorn app.summarizer_api:app --host 0.0.0.0 --port 8020
     labels:
       - "searchi.service=summariser"
-      - "searchi.model=qwen3.5:0.8b"
+      - "searchi.model=summary=qwen2.5:0.5b-instruct,answer=qwen3.5:0.8b"
     ports:
       - "11435:8020"
     volumes:
       - .:/app
     environment:
       OLLAMA_URL: http://ollama:11434
-      SEARCHY_SUMMARIZER_MODEL: qwen3.5:0.8b
+      SEARCHY_SUMMARY_MODEL: qwen2.5:0.5b-instruct
+      SEARCHY_AI_MODEL: qwen3.5:0.8b
       SEARCHY_SUMMARIZER_NUM_CTX: "32768"
       SEARCHY_SUMMARIZER_TIMEOUT: "180.0"
       SEARCHY_AI_SOURCE_LIMIT: "8"

@@ -1,7 +1,8 @@
 #!/bin/sh
 set -e
 
-MODEL_NAME="${SEARCHY_SUMMARIZER_MODEL:-qwen3.5:0.8b}"
+SUMMARY_MODEL="${SEARCHY_SUMMARY_MODEL:-qwen2.5:0.5b-instruct}"
+AI_MODEL="${SEARCHY_AI_MODEL:-qwen3.5:0.8b}"
 export OLLAMA_HOST="${OLLAMA_HOST:-0.0.0.0:11434}"
 
 echo "Starting Ollama server..."
@@ -19,8 +20,11 @@ until ollama list >/dev/null 2>&1; do
   sleep 2
 done
 
-echo "Pulling ${MODEL_NAME} model..."
-ollama pull "${MODEL_NAME}"
+echo "Pulling ${SUMMARY_MODEL} model..."
+ollama pull "${SUMMARY_MODEL}"
+
+echo "Pulling ${AI_MODEL} model..."
+ollama pull "${AI_MODEL}"
 
 echo "Model ready, keeping server running..."
 wait $SERVER_PID
