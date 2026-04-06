@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-MODEL_NAME="${SEARCHY_SUMMARIZER_MODEL:-qwen2.5:0.5b-instruct}"
+MODEL_NAME="${SEARCHY_SUMMARIZER_MODEL:-qwen3.5:0.8b}"
 export OLLAMA_HOST="${OLLAMA_HOST:-0.0.0.0:11434}"
 
 echo "Starting Ollama server..."

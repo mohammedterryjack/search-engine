@@ -176,7 +176,15 @@ def _build_ai_source_payload(results: list[SearchResult]) -> tuple[list[dict[str
             continue
         text = raw_text
         label = _ai_source_label(result, next_id)
-        payload_sources.append({"id": next_id, "citation": label, "text": text})
+        payload_sources.append(
+            {
+                "id": next_id,
+                "citation": label,
+                "text": text,
+                "image_data": result.image_data,
+                "image_mime": result.image_mime,
+            }
+        )
         refs.append(AiSearchSourceRef(id=next_id, label=label))
         next_id += 1
     return payload_sources, refs
@@ -499,6 +507,8 @@ async def api_ai_search(payload: SearchApiRequest) -> StreamingResponse:
 
 class SummarizeSingleRequest(BaseModel):
     text: str
+    image_data: str | None = None
+    image_mime: str | None = None
 
 
 @app.post("/api/summarize-single")
@@ -507,7 +517,11 @@ async def api_summarize_single(payload: SummarizeSingleRequest):
     from fastapi.responses import StreamingResponse
 
     return StreamingResponse(
-        summarize_single_result_stream(payload.text),
+        summarize_single_result_stream(
+            payload.text,
+            image_data=payload.image_data,
+            image_mime=payload.image_mime,
+        ),
         media_type="text/event-stream"
     )
 

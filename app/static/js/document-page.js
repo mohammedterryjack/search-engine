@@ -88,6 +88,8 @@
             class="result-summarize-btn"
             data-summarize-result
             data-result-text="${escapeHtml(result.text_content || displayText)}"
+            data-result-image="${escapeHtml(result.image_data || '')}"
+            data-result-image-mime="${escapeHtml(result.image_mime || '')}"
             title="summarise"
             aria-label="summarise"
           >✨</button>
@@ -156,9 +158,11 @@
     if (!card) return;
 
     const text = button.dataset.resultText;
+    const imageData = button.dataset.resultImage;
+    const imageMime = button.dataset.resultImageMime;
     const summaryContainer = card.querySelector('[data-result-summary]');
     const summaryContent = card.querySelector('[data-result-summary-content]');
-    if (!text || !summaryContent || !summaryContainer) return;
+    if ((!text && !imageData) || !summaryContent || !summaryContainer) return;
 
     // Toggle if already shown
     if (summaryContent.style.display !== 'none') {
@@ -176,7 +180,7 @@
       const response = await fetch('/api/summarize-single', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, image_data: imageData || null, image_mime: imageMime || null }),
       });
 
       if (!response.ok) {

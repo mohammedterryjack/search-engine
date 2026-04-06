@@ -1,50 +1,45 @@
 from __future__ import annotations
 
+import codecs
 import json
-import re
 import urllib.error
 import urllib.request
 
 from app.config import get_settings
 
 
-WORD_WITH_TRAILING_SPACE_RE = re.compile(r"\S+\s*")
-
-
-def _stream_words_from_response(response):
-    buffer = ""
+def _stream_passthrough_response(response):
+    decoder = codecs.getincrementaldecoder("utf-8")()
+    read_chunk = getattr(response, "read1", None)
     while True:
-        chunk = response.read(32)
+        if callable(read_chunk):
+            chunk = read_chunk(1)
+        else:
+            chunk = response.read(1)
         if not chunk:
             break
-        buffer += chunk.decode("utf-8")
+        text = decoder.decode(chunk)
+        if text:
+            yield text
 
-        matches = list(WORD_WITH_TRAILING_SPACE_RE.finditer(buffer))
-        if not matches:
-            continue
-
-        last_consumed = 0
-        for match in matches:
-            # Keep the final partial token in the buffer until more text arrives.
-            if match.end() == len(buffer) and not buffer[-1].isspace():
-                break
-            yield match.group(0)
-            last_consumed = match.end()
-
-        if last_consumed:
-            buffer = buffer[last_consumed:]
-
-    if buffer:
-        yield buffer
+    tail = decoder.decode(b"", final=True)
+    if tail:
+        yield tail
 
 
-def summarize_single_result_stream(text: str):
+def summarize_single_result_stream(
+    text: str,
+    image_data: str | None = None,
+    image_mime: str | None = None,
+):
     settings = get_settings()
-    if not settings.enable_summarizer or not text:
+    if not settings.enable_summarizer or (not text and not image_data):
         return
 
     payload = {
         "text": text,
+        "image_data": image_data,
+        "image_mime": image_mime,
         "max_length": 150,  # ~2-3 sentences
         "min_length": 20,
         "stream": True,
@@ -58,7 +53,7 @@ def summarize_single_result_stream(text: str):
             headers={"Content-Type": "application/json; charset=utf-8"},
         )
         with urllib.request.urlopen(request, timeout=settings.summarizer_timeout) as response:
-            yield from _stream_words_from_response(response)
+            yield from _stream_passthrough_response(response)
     except Exception as exc:
         print(f"Summarizer error: {exc}")
         return
@@ -83,7 +78,7 @@ def answer_search_results_stream(question: str, sources: list[dict[str, object]]
             headers={"Content-Type": "application/json; charset=utf-8"},
         )
         with urllib.request.urlopen(request, timeout=settings.summarizer_timeout) as response:
-            yield from _stream_words_from_response(response)
+            yield from _stream_passthrough_response(response)
     except Exception as exc:
         print(f"Answer generation error: {exc}")
         return

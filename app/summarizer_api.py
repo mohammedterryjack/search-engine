@@ -14,7 +14,7 @@ from pydantic import BaseModel
 logger = logging.getLogger(__name__)
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama:11434").rstrip("/")
-OLLAMA_MODEL = os.getenv("SEARCHY_SUMMARIZER_MODEL", "qwen2.5:0.5b-instruct")
+OLLAMA_MODEL = os.getenv("SEARCHY_SUMMARIZER_MODEL", "qwen3.5:0.8b")
 OLLAMA_TIMEOUT = float(os.getenv("SEARCHY_SUMMARIZER_TIMEOUT", "180.0"))
 OLLAMA_NUM_CTX = int(os.getenv("SEARCHY_SUMMARIZER_NUM_CTX", "32768"))
 
@@ -123,6 +123,8 @@ app = FastAPI(lifespan=lifespan)
 
 class SummarizeRequest(BaseModel):
     text: str
+    image_data: str | None = None
+    image_mime: str | None = None
     max_length: int = 150
     min_length: int = 20
     stream: bool = False
@@ -132,6 +134,8 @@ class AnswerSource(BaseModel):
     id: int
     citation: str
     text: str
+    image_data: str | None = None
+    image_mime: str | None = None
 
 
 class AnswerRequest(BaseModel):
@@ -140,7 +144,7 @@ class AnswerRequest(BaseModel):
     stream: bool = False
 
 
-def _build_answer_messages(question: str, sources: list[AnswerSource]) -> list[dict[str, str]]:
+def _build_answer_messages(question: str, sources: list[AnswerSource]) -> list[dict[str, object]]:
     system_prompt = (
         "You are a careful research assistant. "
         "Answer the user's question using only the provided sources. "
@@ -152,28 +156,56 @@ def _build_answer_messages(question: str, sources: list[AnswerSource]) -> list[d
         "Do not invent facts, quotes, or citations. "
         "Return only the answer text."
     )
-    source_blocks = "\n\n".join(
-        f"<source id=\"{source.id}\" citation=\"{source.citation}\">\n{source.text.strip()}\n</source>"
-        for source in sources
-    )
-    user_prompt = (
-        "Answer the question using only the sources below.\n\n"
-        f"<question>\n{question.strip()}\n</question>\n\n"
-        "<sources>\n"
-        f"{source_blocks}\n\n"
-        "</sources>\n\n"
-        "Write a concise answer with inline citations."
-    )
-    return [
+    messages: list[dict[str, object]] = [
         {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_prompt},
     ]
+    messages.append(
+        {
+            "role": "user",
+            "content": (
+                "Question:\n"
+                f"{question.strip()}\n\n"
+                "I will now provide the numbered sources you must rely on."
+            ),
+        }
+    )
+    for source in sources:
+        source_message: dict[str, object] = {
+            "role": "user",
+            "content": (
+                f"<source id=\"{source.id}\" citation=\"{source.citation}\">\n"
+                f"{source.text.strip()}\n"
+                "</source>\n"
+                "If an image is attached to this message, treat it as part of the same source."
+            ),
+        }
+        if source.image_data:
+            source_message["images"] = [source.image_data]
+        messages.append(source_message)
+    messages.append(
+        {
+            "role": "user",
+            "content": (
+                "Answer the question using only the numbered sources already provided. "
+                "Write a concise answer with inline citations."
+            ),
+        }
+    )
+    return messages
 
 
 @app.post("/summarize")
 async def summarize(request: SummarizeRequest):
     try:
         messages = _build_messages(request.text, request.min_length, request.max_length)
+        if request.image_data and len(messages) > 1:
+            user_message = dict(messages[1])
+            user_message["content"] = (
+                f"{user_message['content']}\n\n"
+                "If an image is attached, use it as additional context for the summary."
+            )
+            user_message["images"] = [request.image_data]
+            messages[1] = user_message
         payload = {
             "model": OLLAMA_MODEL,
             "messages": messages,
