@@ -1,0 +1,1 @@
+curl -X POST http://localhost:18000/api/search -H 'Content-Type: application/json' -d '{"q":"What is a cat?"}'

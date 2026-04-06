@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}{{ query or 'AI Search' }} - searChi{% endblock %}
+{% block body %}
+<header class="topbar">
+  <a href="/" class="brand brand-small"><span class="brand-letter">s</span><span class="brand-letter">e</span><span class="brand-letter">a</span><span class="brand-letter">r</span><span class="brand-letter">C</span><span class="brand-letter">h</span><span class="brand-letter">i</span></a>
+  <form action="/ai-search" method="get" class="search-form results-search-form" data-search-form>
+    <div class="search-bar-row">
+      <div class="search-input-wrap">
+        <input type="text" name="q" value="{{ query }}" class="search-input" autocomplete="off" autofocus>
+      </div>
+      <details class="advanced-toggle">
+        <summary class="advanced-icon-button" aria-label="Advanced settings" title="Advanced settings">&#9881;</summary>
+        <div class="advanced-flyout">
+          <div class="advanced-grid">
+            <div class="advanced-group">
+              <div class="advanced-label">Sources</div>
+              <div class="advanced-option-row">
+                {% for source in sources %}
+                <label class="advanced-option">
+                  <input
+                    type="checkbox"
+                    name="source"
+                    value="{{ source.id }}"
+                    {% if not selected_sources or source.id in selected_sources %}checked{% endif %}
+                  >
+                  <span>{{ source.source_path }}</span>
+                </label>
+                {% endfor %}
+              </div>
+            </div>
+            <div class="advanced-group">
+              <div class="advanced-label">Search in</div>
+              <div class="advanced-option-row">
+                {% for value in all_unit_types %}
+                <label class="advanced-option">
+                  <input type="checkbox" name="unit_type" value="{{ value }}" {% if value in selected_unit_types %}checked{% endif %}>
+                  <span>{{ value|capitalize }}</span>
+                </label>
+                {% endfor %}
+              </div>
+            </div>
+            <div class="advanced-group advanced-group-wide">
+              <label class="advanced-label" for="vector_min_score_ai">Semantic match strictness</label>
+              <input
+                id="vector_min_score_ai"
+                name="vector_min_score"
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value="{{ vector_min_score }}"
+                class="threshold-slider"
+                data-threshold-output="vector_min_score_ai_value"
+              >
+              <div class="slider-legend">
+                <strong id="vector_min_score_ai_value">{{ "%.2f"|format(vector_min_score) }}</strong>
+                <span>Strict</span>
+              </div>
+              <div class="advanced-help">0.00 keeps all semantic hits. Higher values filter out weaker semantic matches.</div>
+            </div>
+          </div>
+        </div>
+      </details>
+    </div>
+  </form>
+</header>
+<main class="results-layout">
+  <section class="results-column">
+    <div data-results-error class="form-error" data-visible="false"></div>
+    <div data-results-warning class="form-success" data-visible="false"></div>
+
+    <div class="results-meta" data-results-meta>
+      {% if query %}
+      Generating answer
+      {% endif %}
+    </div>
+
+    <article class="result-card">
+      <h2 class="result-title">AI Answer</h2>
+      <p class="ai-answer-body" data-ai-answer>
+        {% if query %}
+        Thinking…
+        {% else %}
+        Ask a question and I’ll answer from the indexed sources with citations.
+        {% endif %}
+      </p>
+      <section class="ai-citations" data-ai-citations hidden>
+        <div class="result-subtitle">Citations</div>
+        <ol class="ai-citation-list" data-ai-citation-list></ol>
+      </section>
+    </article>
+  </section>
+</main>
+<script>
+  (function () {
+    document.querySelectorAll("[data-threshold-output]").forEach(function (input) {
+      const output = document.getElementById(input.getAttribute("data-threshold-output"));
+      if (!output) return;
+      function sync() {
+        output.textContent = Number(input.value).toFixed(2);
+      }
+      input.addEventListener("input", sync);
+      sync();
+    });
+  })();
+</script>
+<script type="module" src="{{ url_for('static', path='/js/ai-search-page.js') }}"></script>
+{% endblock %}

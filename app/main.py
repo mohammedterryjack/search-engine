@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import mimetypes
 import os
 import random
@@ -12,7 +13,7 @@ from pathlib import Path
 from urllib.parse import urlencode
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, StreamingResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -25,6 +26,7 @@ from app.services.ingest import list_supported_documents
 from app.models import SearchResponse, SearchResult
 from app.services.content_units import display_text_for_unit
 from app.services.search import SearchPipelineError, search_all_sources
+from app.services.summarize import answer_search_results_stream
 from app.services.vector_store import (
     faiss_path_for_db,
     faiss_reconciliation_report,
@@ -80,6 +82,15 @@ class SearchApiResponse(BaseModel):
     results: list[dict[str, object]]
     warning: str | None = None
     error: str | None = None
+
+
+class AiSearchSourceRef(BaseModel):
+    id: int
+    label: str
+
+
+def _sse_event(payload: dict[str, object]) -> str:
+    return f"data: {json.dumps(payload)}\n\n"
 
 
 def _normalize_unit_types(values: list[str] | None) -> set[str]:
@@ -141,6 +152,34 @@ def _apply_highlights(results: list[SearchResult], query: str) -> None:
     for result in results:
         snippet = truncate_text(result.display_text or "", SNIPPET_CHAR_LIMIT)
         result.highlighted_text = highlight_terms(snippet, query)
+
+
+def _ai_source_label(result: SearchResult, source_id: int) -> str:
+    title = (result.section_name or "").strip() or result.filename
+    extras = [result.filename]
+    if result.page_number is not None:
+        extras.append(f"p. {result.page_number}")
+    extra_text = " · ".join(part for part in extras if part)
+    return f"{title} ({extra_text})" if extra_text else title
+
+
+def _build_ai_source_payload(results: list[SearchResult]) -> tuple[list[dict[str, object]], list[AiSearchSourceRef]]:
+    payload_sources: list[dict[str, object]] = []
+    refs: list[AiSearchSourceRef] = []
+    next_id = 1
+    max_sources = settings.ai_source_limit
+    for result in results:
+        if len(payload_sources) >= max_sources:
+            break
+        raw_text = (result.text_content or "").strip()
+        if not raw_text:
+            continue
+        text = raw_text
+        label = _ai_source_label(result, next_id)
+        payload_sources.append({"id": next_id, "citation": label, "text": text})
+        refs.append(AiSearchSourceRef(id=next_id, label=label))
+        next_id += 1
+    return payload_sources, refs
 
 
 def format_bytes(size: int) -> str:
@@ -361,6 +400,30 @@ async def search(
     )
 
 
+@app.get("/ai-search", response_class=HTMLResponse)
+async def ai_search(
+    request: Request,
+    q: str = "",
+    source: list[int] | None = None,
+    unit_type: list[str] | None = None,
+    vector_min_score: float | None = None,
+) -> HTMLResponse:
+    filters = _build_search_filters(source, unit_type, vector_min_score)
+    store = GlobalStore()
+    return templates.TemplateResponse(
+        request,
+        "ai_results.html",
+        {
+            "query": q,
+            "sources": store.list_source_roots(),
+            "selected_sources": filters.source_ids,
+            "selected_unit_types": filters.unit_types,
+            "all_unit_types": list(ALLOWED_UNIT_TYPES),
+            "vector_min_score": filters.vector_min_score,
+        },
+    )
+
+
 @app.post("/api/search", response_model=SearchApiResponse)
 async def api_search(payload: SearchApiRequest) -> SearchApiResponse:
     filters = _build_search_filters(
@@ -374,6 +437,64 @@ async def api_search(payload: SearchApiRequest) -> SearchApiResponse:
         warning=search_response.warning,
         error=search_error,
     )
+
+
+@app.post("/api/ai-search")
+async def api_ai_search(payload: SearchApiRequest) -> StreamingResponse:
+    filters = _build_search_filters(
+        payload.source,
+        payload.unit_type,
+        payload.vector_min_score
+    )
+
+    def stream():
+        query = payload.q.strip()
+        if not query:
+            yield _sse_event({"type": "done"})
+            return
+
+        search_response, search_error = _execute_search(query, filters)
+        if search_error:
+            yield _sse_event({"type": "error", "error": search_error})
+            yield _sse_event({"type": "done"})
+            return
+
+        if search_response.warning:
+            yield _sse_event({"type": "warning", "warning": search_response.warning})
+
+        source_payload, source_refs = _build_ai_source_payload(search_response.results)
+        if source_refs:
+            yield _sse_event(
+                {
+                    "type": "sources",
+                    "sources": [ref.model_dump() for ref in source_refs],
+                }
+            )
+
+        if not source_payload:
+            yield _sse_event(
+                {
+                    "type": "answer",
+                    "chunk": "I couldn't find enough relevant indexed text to answer that query.",
+                }
+            )
+            yield _sse_event({"type": "done"})
+            return
+
+        yielded = False
+        for chunk in answer_search_results_stream(query, source_payload) or ():
+            yielded = True
+            yield _sse_event({"type": "answer", "chunk": chunk})
+        if not yielded:
+            yield _sse_event(
+                {
+                    "type": "error",
+                    "error": "AI answer generation failed.",
+                }
+            )
+        yield _sse_event({"type": "done"})
+
+    return StreamingResponse(stream(), media_type="text/event-stream")
 
 
 class SummarizeSingleRequest(BaseModel):

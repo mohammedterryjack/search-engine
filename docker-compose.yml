@@ -21,6 +21,9 @@ services:
       SEARCHY_STATUS_TOKEN: searchi-local-status
       SEARCHY_ENABLE_RERANKER: "1"
       SEARCHY_SUMMARIZER_URL: http://summariser:8020
+      SEARCHY_SUMMARIZER_MODEL: qwen2.5:0.5b-instruct
+      SEARCHY_SUMMARIZER_NUM_CTX: "32768"
+      SEARCHY_AI_SOURCE_LIMIT: "8"
       HF_HOME: /root/.cache/huggingface
     depends_on:
       reranker:
@@ -46,6 +49,9 @@ services:
       SEARCHY_ENABLE_VECTOR_RETRIEVAL: "1"
       SEARCHY_STATUS_TOKEN: searchi-local-status
       SEARCHY_POLL_SECONDS: "3"
+      SEARCHY_SUMMARIZER_MODEL: qwen2.5:0.5b-instruct
+      SEARCHY_SUMMARIZER_NUM_CTX: "32768"
+      SEARCHY_AI_SOURCE_LIMIT: "8"
       HF_HOME: /root/.cache/huggingface
     deploy:
       replicas: 1
@@ -78,19 +84,44 @@ services:
       SEARCHY_RERANKER_BATCH_SIZE: "16"
       HF_HOME: /root/.cache/huggingface
 
+  ollama:
+    image: ollama/ollama:latest
+    entrypoint: ["/bin/sh", "/app/scripts/init-ollama.sh"]
+    labels:
+      - "searchi.service=ollama"
+      - "searchi.model=qwen2.5:0.5b-instruct"
+    volumes:
+      - .:/app
+      - ${HOME}/.searchi/ollama:/root/.ollama
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+      SEARCHY_SUMMARIZER_MODEL: qwen2.5:0.5b-instruct
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
   summariser:
     build: .
     command: uvicorn app.summarizer_api:app --host 0.0.0.0 --port 8020
     labels:
       - "searchi.service=summariser"
-      - "searchi.model=Falconsai/text_summarization"
+      - "searchi.model=qwen2.5:0.5b-instruct"
     ports:
       - "11435:8020"
     volumes:
       - .:/app
-      - ${HOME}/.searchi/model_cache:/root/.cache
     environment:
-      HF_HOME: /root/.cache/huggingface
+      OLLAMA_URL: http://ollama:11434
+      SEARCHY_SUMMARIZER_MODEL: qwen2.5:0.5b-instruct
+      SEARCHY_SUMMARIZER_NUM_CTX: "32768"
+      SEARCHY_SUMMARIZER_TIMEOUT: "180.0"
+      SEARCHY_AI_SOURCE_LIMIT: "8"
+    depends_on:
+      ollama:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8020/health"]
       interval: 30s

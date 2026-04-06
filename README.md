@@ -13,7 +13,7 @@ SearChi is a local document search engine with:
 
 - `web`: FastAPI UI and API
 - `parser`: background document parsing (Docling + RapidOCR)
-- `summariser`: text summarization API (Falconsai T5)
+- `summariser`: text summarization API backed by Ollama (`qwen2.5:0.5b-instruct`)
 - `reranker`: cross-encoder reranking service (MiniLM-L4)
 
 See [MODELS.md](MODELS.md) for detailed model information.
@@ -28,7 +28,7 @@ With the default local configuration, runtime data lives under `~/.searchi/`.
 
 The Docker Compose setup also points at the host `~/.searchi/` directory via a bind mount (so nothing is written to `./data/` anymore).
 
-**Note:** On first startup, the summariser service will automatically download the `qwen2.5:0.5b-instruct` model (~300MB). This may take a minute or two depending on your connection speed.
+**Note:** On first startup, the Ollama service will automatically download the `qwen2.5:0.5b-instruct` model (~300MB) into `~/.searchi/ollama`. This may take a minute or two depending on your connection speed.
 
 ## HTTP API
 

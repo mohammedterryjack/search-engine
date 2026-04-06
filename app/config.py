@@ -24,6 +24,8 @@ class Settings:
     summarizer_url: str
     summarizer_model: str
     summarizer_timeout: float
+    ai_source_limit: int
+    ai_source_limit: int
 
 
 def default_data_dir() -> Path:
@@ -54,8 +56,9 @@ def get_settings() -> Settings:
     poll_seconds = float(os.getenv("SEARCHY_POLL_SECONDS", "3"))
     enable_summarizer = os.getenv("SEARCHY_ENABLE_SUMMARIZER", "1") == "1"
     summarizer_url = os.getenv("SEARCHY_SUMMARIZER_URL", "http://localhost:11434")
-    summarizer_model = os.getenv("SEARCHY_SUMMARIZER_MODEL", "Falconsai/text_summarization")
+    summarizer_model = os.getenv("SEARCHY_SUMMARIZER_MODEL", "qwen2.5:0.5b-instruct")
     summarizer_timeout = float(os.getenv("SEARCHY_SUMMARIZER_TIMEOUT", "180.0"))
+    ai_source_limit = int(os.getenv("SEARCHY_AI_SOURCE_LIMIT", "8"))
 
     return Settings(
         data_dir=data_dir,
@@ -74,4 +77,5 @@ def get_settings() -> Settings:
         summarizer_url=summarizer_url,
         summarizer_model=summarizer_model,
         summarizer_timeout=summarizer_timeout,
+        ai_source_limit=ai_source_limit,
     )
