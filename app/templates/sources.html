@@ -100,15 +100,7 @@
   {% if rows %}
   <section class="admin-card">
     <h3>Recent Jobs</h3>
-    {% set all_jobs = [] %}
-    {% for row in rows %}
-      {% for job in row.jobs %}
-        {% set _ = all_jobs.append(job) %}
-      {% endfor %}
-    {% endfor %}
-
-    {% for job in all_jobs[:20] %}
-    {% if job.status in ['pending', 'failed'] %}
+    {% for job in recent_jobs %}
     <div class="job-row">
       <span class="job-status job-{{ job.status }}">{{ job.status }}</span>
       <div class="job-detail">
@@ -121,7 +113,6 @@
         {% endif %}
       </div>
     </div>
-    {% endif %}
     {% else %}
     <div class="job-row muted">No pending or failed jobs.</div>
     {% endfor %}

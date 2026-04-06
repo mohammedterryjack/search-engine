@@ -6,7 +6,7 @@ import random
 import shutil
 import urllib.error
 import urllib.request
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urlencode
@@ -68,12 +68,6 @@ class SearchFilters:
     vector_min_score: float
 
 
-class SearchApiFilters(BaseModel):
-    source_ids: list[int]
-    unit_types: list[str]
-    vector_min_score: float
-
-
 class SearchApiRequest(BaseModel):
     q: str = ""
     source: list[int] = Field(default_factory=list)
@@ -86,7 +80,6 @@ class SearchApiResponse(BaseModel):
     results: list[dict[str, object]]
     warning: str | None = None
     error: str | None = None
-    filters: SearchApiFilters
 
 
 def _normalize_unit_types(values: list[str] | None) -> set[str]:
@@ -125,11 +118,21 @@ def _execute_search(query: str, filters: SearchFilters) -> tuple[SearchResponse,
 
 
 def _serialize_search_results(results: list[SearchResult]) -> list[dict[str, object]]:
-    return [asdict(result) for result in results]
-
-
-def _order_unit_types(values: set[str]) -> list[str]:
-    return [value for value in ALLOWED_UNIT_TYPES if value in values]
+    serialized_results: list[dict[str, object]] = []
+    for result in results:
+        serialized_results.append(
+            {
+                "source_root_id": result.source_root_id,
+                "content_unit_id": result.content_unit_id,
+                "unit_type": result.unit_type,
+                "page_number": result.page_number,
+                "section_name": result.section_name,
+                "text_content": result.text_content or "",
+                "image_mime": result.image_mime,
+                "image_data": result.image_data,
+            }
+        )
+    return serialized_results
 
 
 def _apply_highlights(results: list[SearchResult], query: str) -> None:
@@ -370,11 +373,6 @@ async def api_search(payload: SearchApiRequest) -> SearchApiResponse:
         results=_serialize_search_results(search_response.results),
         warning=search_response.warning,
         error=search_error,
-        filters=SearchApiFilters(
-            source_ids=sorted(filters.source_ids),
-            unit_types=_order_unit_types(filters.unit_types),
-            vector_min_score=filters.vector_min_score,
-        ),
     )
 
 
@@ -404,8 +402,12 @@ async def sources_view(
     store = GlobalStore()
     rows = []
     overall_unit_counts = {"section": 0, "figure": 0, "table": 0}
+    all_jobs = store.list_jobs()
     global_job_counts = store.job_status_counts()
-    running_jobs = [job for job in store.list_jobs() if str(job["status"]) == "running"][:10]
+    running_jobs = [job for job in all_jobs if str(job["status"]) == "running"][:10]
+    recent_jobs = [
+        job for job in all_jobs if str(job["status"]) in {"pending", "failed"}
+    ][:20]
     for source in store.list_source_roots():
         source_store = SourceStore(Path(str(source["db_path"])))
         db_path = Path(str(source["db_path"]))
@@ -430,7 +432,6 @@ async def sources_view(
             {
                 "source": source,
                 "documents": documents,
-                "jobs": store.list_jobs(int(source["id"]))[:10],
                 "job_counts": job_counts,
                 "stats": source_store.stats(),
                 "vector_report": vector_report,
@@ -444,6 +445,7 @@ async def sources_view(
             "rows": rows,
             "global_job_counts": global_job_counts,
             "running_jobs": running_jobs,
+            "recent_jobs": recent_jobs,
             "indexing_active": bool(global_job_counts["running"] or global_job_counts["pending"]),
             "reranker_health": reranker_health(),
             "error": error,
@@ -666,7 +668,7 @@ async def api_status() -> dict[str, object]:
     return await get_status_data()
 
 
-def _get_document_sections(source_root_id: int, document_id: int) -> tuple[list[SearchResult], str]:
+def _get_document_sections(source_root_id: int, document_id: int) -> list[SearchResult]:
     """Helper to get document sections as SearchResult objects."""
     store = GlobalStore()
     source_root = store.get_source_root(source_root_id)
@@ -703,24 +705,19 @@ def _get_document_sections(source_root_id: int, document_id: int) -> tuple[list[
         )
         for row in rows
     ]
-    filename = str(rows[0]["filename"])
-    return results, filename
+    return results
 
 
 class DocumentSectionsResponse(BaseModel):
     results: list[dict[str, object]]
-    filename: str
-    result_count: int
 
 
 @app.get("/api/sources/{source_root_id}/documents/{document_id}", response_model=DocumentSectionsResponse)
 async def api_document_sections(source_root_id: int, document_id: int) -> DocumentSectionsResponse:
-    results, filename = _get_document_sections(source_root_id, document_id)
+    results = _get_document_sections(source_root_id, document_id)
     _apply_highlights(results, "")
     return DocumentSectionsResponse(
         results=_serialize_search_results(results),
-        filename=filename,
-        result_count=len(results),
     )
 
 

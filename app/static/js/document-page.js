@@ -19,12 +19,41 @@
 
   const capitalize = (value = '') => (value ? `${value.charAt(0).toUpperCase()}${value.slice(1)}` : '');
 
+  const truncateText = (text = '', limit = 320) => {
+    if (text.length <= limit) {
+      return text;
+    }
+    return `${text.slice(0, limit - 1).replace(/\s+$/, '')}\u2026`;
+  };
+
+  const deriveDisplayText = (result) => {
+    const text = (result.text_content || '').trim();
+    const section = (result.section_name || '').trim();
+    if (text) {
+      return text;
+    }
+    if (result.unit_type === 'figure' && section) {
+      return `Figure in ${section}`;
+    }
+    if (result.unit_type === 'table' && section) {
+      return `Table in ${section}`;
+    }
+    if (result.unit_type === 'figure') {
+      return 'Figure';
+    }
+    if (result.unit_type === 'table') {
+      return 'Table';
+    }
+    return '';
+  };
+
   const renderResultCard = (result) => {
-    const sectionLabel = result.section_name || result.filename || '';
+    const sectionLabel = result.section_name || 'Untitled';
     const titleText = result.unit_type === 'section'
       ? sectionLabel
       : `${capitalize(result.unit_type)} · ${sectionLabel}`;
-    const snippet = result.highlighted_text || escapeHtml(result.display_text || '');
+    const displayText = deriveDisplayText(result);
+    const snippet = escapeHtml(truncateText(displayText));
     const subtitleParts = [`<span>${escapeHtml(result.unit_type)}</span>`];
     if (typeof result.page_number === 'number' && !Number.isNaN(result.page_number)) {
       subtitleParts.push(`<span>Page ${result.page_number}</span>`);
@@ -41,7 +70,6 @@
       : '';
     return `
       <article class="result-card">
-        <div class="result-path">${escapeHtml(result.document_path || '')}</div>
         <h2 class="result-title">
           <a href="/open/${result.source_root_id}/${result.content_unit_id}">
             ${escapeHtml(titleText)}
@@ -53,13 +81,13 @@
         <p
           class="result-snippet"
           title="Click to expand"
-          data-full-text="${escapeHtml(result.display_text || '')}"
+          data-full-text="${escapeHtml(displayText)}"
         >${snippet}</p>
         <div class="result-summary-container" data-result-summary>
           <button
             class="result-summarize-btn"
             data-summarize-result
-            data-result-text="${escapeHtml(result.text_content || result.display_text || '')}"
+            data-result-text="${escapeHtml(result.text_content || displayText)}"
             title="summarise"
             aria-label="summarise"
           >✨</button>
@@ -90,11 +118,11 @@
     metaElement.textContent = `${count} content unit${count === 1 ? '' : 's'}`;
   };
 
-  const renderTitle = (filename) => {
+  const renderTitle = () => {
     if (!titleElement) {
       return;
     }
-    titleElement.textContent = `Document View · ${filename}`;
+    titleElement.textContent = 'Document View';
   };
 
   const renderError = (error) => {
@@ -111,8 +139,8 @@
         throw new Error(`Failed to load document (${response.status})`);
       }
       const data = await response.json();
-      renderTitle(data.filename);
-      renderMeta(data.result_count);
+      renderTitle();
+      renderMeta(data.results.length);
       renderResults(data.results);
       renderError(null);
     } catch (error) {

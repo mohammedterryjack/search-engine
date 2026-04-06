@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import json
 
-from app.main import summarizer_health, vector_health
+from app.main import _serialize_search_results, summarizer_health, vector_health
+from app.models import SearchResult
 from app.services.vector_store import VectorStoreError
 
 
@@ -96,3 +97,73 @@ def test_summarizer_health_uses_service_health_endpoint(monkeypatch) -> None:
         "model_name": "Falconsai/text_summarization",
         "url": "http://summariser:8020",
     }
+
+
+def test_serialize_search_results_returns_public_api_shape() -> None:
+    results = [
+        SearchResult(
+            source_root_id=1,
+            source_path="/source/root",
+            document_id=7,
+            content_unit_id=9,
+            document_path="/docs/paper.pdf",
+            filename="paper.pdf",
+            unit_type="section",
+            page_number=3,
+            section_name="Introduction",
+            display_text="Short display text",
+            score=0.87,
+            text_content="Full section text",
+            image_mime=None,
+            image_data=None,
+            highlighted_text="<mark>Short</mark> display text",
+        )
+    ]
+
+    payload = _serialize_search_results(results)
+
+    assert payload == [
+        {
+            "source_root_id": 1,
+            "content_unit_id": 9,
+            "unit_type": "section",
+            "page_number": 3,
+            "section_name": "Introduction",
+            "text_content": "Full section text",
+            "image_mime": None,
+            "image_data": None,
+        }
+    ]
+
+
+def test_serialize_search_results_defaults_missing_text_content_to_empty_string() -> None:
+    results = [
+        SearchResult(
+            source_root_id=1,
+            source_path="/source/root",
+            document_id=7,
+            content_unit_id=9,
+            document_path="/docs/paper.pdf",
+            filename="paper.pdf",
+            unit_type="figure",
+            page_number=None,
+            section_name="Figure 1",
+            display_text="Rendered caption",
+            score=0.42,
+            text_content=None,
+            image_mime="image/png",
+            image_data="abc123",
+            highlighted_text=None,
+        )
+    ]
+
+    payload = _serialize_search_results(results)
+
+    assert payload[0]["text_content"] == ""
+    assert "score" not in payload[0]
+    assert "source_path" not in payload[0]
+    assert "document_id" not in payload[0]
+    assert "document_path" not in payload[0]
+    assert "display_text" not in payload[0]
+    assert "filename" not in payload[0]
+    assert "highlighted_text" not in payload[0]
