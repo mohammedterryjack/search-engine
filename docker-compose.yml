@@ -97,7 +97,7 @@ services:
       OLLAMA_HOST: 0.0.0.0:11434
       SEARCHY_SUMMARIZER_MODEL: qwen3.5:0.8b
     healthcheck:
-      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1"]
+      test: ["CMD-SHELL", "ollama list | grep -q \"^$$SEARCHY_SUMMARIZER_MODEL[[:space:]]\""]
       interval: 30s
       timeout: 10s
       retries: 5

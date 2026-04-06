@@ -52,7 +52,7 @@ def summarize_single_result_stream(
             method="POST",
             headers={"Content-Type": "application/json; charset=utf-8"},
         )
-        with urllib.request.urlopen(request, timeout=settings.summarizer_timeout) as response:
+        with urllib.request.urlopen(request) as response:
             yield from _stream_passthrough_response(response)
     except Exception as exc:
         print(f"Summarizer error: {exc}")
@@ -77,7 +77,7 @@ def answer_search_results_stream(question: str, sources: list[dict[str, object]]
             method="POST",
             headers={"Content-Type": "application/json; charset=utf-8"},
         )
-        with urllib.request.urlopen(request, timeout=settings.summarizer_timeout) as response:
+        with urllib.request.urlopen(request) as response:
             yield from _stream_passthrough_response(response)
     except Exception as exc:
         print(f"Answer generation error: {exc}")

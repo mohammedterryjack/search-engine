@@ -77,7 +77,9 @@ def _warm_model() -> None:
 
 def _stream_generate(payload: dict[str, object]):
     request = _ollama_request("/api/chat", payload)
-    with urllib.request.urlopen(request, timeout=OLLAMA_TIMEOUT) as response:
+    # Avoid socket read timeouts during streamed generation; some models take a
+    # while before yielding the first chunk, especially on cold starts.
+    with urllib.request.urlopen(request) as response:
         buffer = ""
         while True:
             chunk = response.read(1024)
