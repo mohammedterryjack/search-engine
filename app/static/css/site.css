@@ -265,10 +265,70 @@ a:hover {
   max-width: 720px;
 }
 
+.ai-mode-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.6rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 0.9);
+  font-size: 0.9rem;
+  color: var(--text);
+  box-shadow: 0 4px 12px rgba(32, 33, 36, 0.12);
+}
+
+.ai-mode-button:hover {
+  border-color: rgba(0, 0, 0, 0.2);
+  transform: translateY(-1px);
+}
+
+.ai-mode-icon {
+  font-size: 1rem;
+}
+
 .results-layout {
   display: block;
   padding: 1.5rem 2rem 3rem;
   position: relative;
+}
+.ai-layout {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2rem clamp(1rem, 4vw, 64px) 3rem;
+  gap: 1.5rem;
+}
+
+.ai-hero-card {
+  width: min(640px, 100%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.35rem 1.5rem;
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(108, 122, 223, 0.15), rgba(108, 122, 223, 0));
+  border: 1px solid rgba(108, 122, 223, 0.35);
+  box-shadow: 0 20px 40px rgba(67, 81, 209, 0.2);
+  gap: 1rem;
+}
+
+.ai-hero-card h1 {
+  margin: 0 0 0.35rem;
+  font-size: 1.8rem;
+}
+
+.ai-hero-card p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.ai-hero-badge {
+  border-radius: 999px;
+  padding: 0.45rem 0.95rem;
+  font-size: 0.85rem;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(108, 122, 223, 0.35);
 }
 
 .filters-title {

@@ -64,7 +64,14 @@
     </div>
   </form>
 </header>
-<main class="results-layout">
+<main class="ai-layout">
+  <section class="ai-hero-card">
+    <div>
+      <h1>AI Mode</h1>
+      <p>Ask a question and get a concise answer synthesized from the freshest indexed content. Every claim is footnoted with the source that backs it.</p>
+    </div>
+    <div class="ai-hero-badge">Streamed answer</div>
+  </section>
   <section class="results-column">
     <div data-results-error class="form-error" data-visible="false"></div>
     <div data-results-warning class="form-success" data-visible="false"></div>
@@ -78,11 +85,11 @@
     <article class="result-card">
       <h2 class="result-title">AI Answer</h2>
       <p class="ai-answer-body" data-ai-answer>
-        {% if query %}
-        Thinking…
-        {% else %}
-        Ask a question and I’ll answer from the indexed sources with citations.
-        {% endif %}
+      {% if query %}
+      Thinking...
+      {% else %}
+      Ask a question and I'll answer from the indexed sources with citations.
+      {% endif %}
       </p>
       <section class="ai-citations" data-ai-citations hidden>
         <div class="result-subtitle">Citations</div>
