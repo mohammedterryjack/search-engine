@@ -6,6 +6,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
+def require_env(name: str) -> str:
+    value = os.getenv(name)
+    if value is None or value == "":
+        raise RuntimeError(f"Missing required environment variable: {name}")
+    return value
+
+
 @dataclass(frozen=True)
 class Settings:
     data_dir: Path
@@ -34,30 +41,27 @@ def default_data_dir() -> Path:
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    data_dir = Path(os.getenv("SEARCHY_DATA_DIR", str(default_data_dir()))).resolve()
+    data_dir = Path(require_env("SEARCHY_DATA_DIR")).resolve()
     app_db_path = Path(
-        os.getenv("SEARCHY_APP_DB_PATH", str(data_dir / "app_data" / "searchi_app.sqlite3"))
+        require_env("SEARCHY_APP_DB_PATH")
     ).resolve()
     source_db_dir = Path(
-        os.getenv("SEARCHY_SOURCE_DB_DIR", str(data_dir / "source_dbs"))
+        require_env("SEARCHY_SOURCE_DB_DIR")
     ).resolve()
-    allowed_source_root = Path(os.getenv("SEARCHY_ALLOWED_SOURCE_ROOT", "/Users")).resolve()
-    vector_model_name = os.getenv(
-        "SEARCHY_VECTOR_MODEL",
-        "sentence-transformers/all-MiniLM-L6-v2",
-    )
-    enable_vector_retrieval = os.getenv("SEARCHY_ENABLE_VECTOR_RETRIEVAL", "1") == "1"
-    vector_min_score_default = float(os.getenv("SEARCHY_VECTOR_MIN_SCORE_DEFAULT", "0.2"))
-    reranker_url = os.getenv("SEARCHY_RERANKER_URL", "http://localhost:8010")
-    reranker_timeout = float(os.getenv("SEARCHY_RERANKER_TIMEOUT", "15"))
-    status_token = os.getenv("SEARCHY_STATUS_TOKEN", "searchi-local-status")
-    enable_reranker = os.getenv("SEARCHY_ENABLE_RERANKER", "1") == "1"
-    poll_seconds = float(os.getenv("SEARCHY_POLL_SECONDS", "3"))
-    enable_summarizer = os.getenv("SEARCHY_ENABLE_SUMMARIZER", "1") == "1"
-    summarizer_url = os.getenv("SEARCHY_SUMMARIZER_URL", "http://localhost:11434")
-    summarizer_model = os.getenv("SEARCHY_SUMMARY_MODEL", "qwen2.5:0.5b-instruct")
-    summarizer_timeout = float(os.getenv("SEARCHY_SUMMARIZER_TIMEOUT", "180.0"))
-    ai_source_limit = int(os.getenv("SEARCHY_AI_SOURCE_LIMIT", "8"))
+    allowed_source_root = Path(require_env("SEARCHY_ALLOWED_SOURCE_ROOT")).resolve()
+    vector_model_name = require_env("SEARCHY_VECTOR_MODEL")
+    enable_vector_retrieval = require_env("SEARCHY_ENABLE_VECTOR_RETRIEVAL") == "1"
+    vector_min_score_default = float(require_env("SEARCHY_VECTOR_MIN_SCORE_DEFAULT"))
+    reranker_url = require_env("SEARCHY_RERANKER_URL")
+    reranker_timeout = float(require_env("SEARCHY_RERANKER_TIMEOUT"))
+    status_token = require_env("SEARCHY_STATUS_TOKEN")
+    enable_reranker = require_env("SEARCHY_ENABLE_RERANKER") == "1"
+    poll_seconds = float(require_env("SEARCHY_POLL_SECONDS"))
+    enable_summarizer = require_env("SEARCHY_ENABLE_SUMMARIZER") == "1"
+    summarizer_url = require_env("SEARCHY_SUMMARIZER_URL")
+    summarizer_model = require_env("SEARCHY_SUMMARY_MODEL")
+    summarizer_timeout = float(require_env("SEARCHY_SUMMARIZER_TIMEOUT"))
+    ai_source_limit = int(require_env("SEARCHY_AI_SOURCE_LIMIT"))
 
     return Settings(
         data_dir=data_dir,

@@ -13,11 +13,19 @@ from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
-OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama:11434").rstrip("/")
-SUMMARY_MODEL = os.getenv("SEARCHY_SUMMARY_MODEL", "qwen2.5:0.5b-instruct")
-AI_MODEL = os.getenv("SEARCHY_AI_MODEL", "qwen3.5:0.8b")
-OLLAMA_TIMEOUT = float(os.getenv("SEARCHY_SUMMARIZER_TIMEOUT", "180.0"))
-OLLAMA_NUM_CTX = int(os.getenv("SEARCHY_SUMMARIZER_NUM_CTX", "32768"))
+
+def require_env(name: str) -> str:
+    value = os.getenv(name)
+    if value is None or value == "":
+        raise RuntimeError(f"Missing required environment variable: {name}")
+    return value
+
+
+OLLAMA_URL = require_env("OLLAMA_URL").rstrip("/")
+SUMMARY_MODEL = require_env("SEARCHY_SUMMARY_MODEL")
+AI_MODEL = require_env("SEARCHY_AI_MODEL")
+OLLAMA_TIMEOUT = float(require_env("SEARCHY_SUMMARIZER_TIMEOUT"))
+OLLAMA_NUM_CTX = int(require_env("SEARCHY_SUMMARIZER_NUM_CTX"))
 
 
 def _build_messages(text: str, min_length: int, max_length: int) -> list[dict[str, str]]:

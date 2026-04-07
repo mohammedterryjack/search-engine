@@ -1,9 +1,9 @@
 #!/bin/sh
 set -e
 
-SUMMARY_MODEL="${SEARCHY_SUMMARY_MODEL:-qwen2.5:0.5b-instruct}"
-AI_MODEL="${SEARCHY_AI_MODEL:-qwen3.5:0.8b}"
-export OLLAMA_HOST="${OLLAMA_HOST:-0.0.0.0:11434}"
+SUMMARY_MODEL="${SEARCHY_SUMMARY_MODEL:?Missing SEARCHY_SUMMARY_MODEL}"
+AI_MODEL="${SEARCHY_AI_MODEL:?Missing SEARCHY_AI_MODEL}"
+export OLLAMA_HOST="${OLLAMA_HOST:?Missing OLLAMA_HOST}"
 
 echo "Starting Ollama server..."
 ollama serve &
