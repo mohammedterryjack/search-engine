@@ -4,78 +4,68 @@
 {% block body %}
 <header class="topbar">
   <a href="/" class="brand brand-small"><span class="brand-letter">s</span><span class="brand-letter">e</span><span class="brand-letter">a</span><span class="brand-letter">r</span><span class="brand-letter">C</span><span class="brand-letter">h</span><span class="brand-letter">i</span></a>
-  <form action="/ai-search" method="get" class="search-form results-search-form" data-search-form data-primary-search-form>
-    <div class="search-bar-row">
-      <div class="search-input-wrap">
-        <input type="text" name="q" value="{{ query }}" class="search-input" autocomplete="off" autofocus>
-        <div class="search-input-tools">
-          <span class="ai-mode-pill ai-mode-pill-active" aria-current="page">
-            <span class="ai-mode-pill-icon" aria-hidden="true">✦</span>
-            <span>AI Mode</span>
-          </span>
-        </div>
-      </div>
-      <details class="advanced-toggle">
-        <summary class="advanced-icon-button" aria-label="Advanced settings" title="Advanced settings">&#9881;</summary>
-        <div class="advanced-flyout">
-          <div class="advanced-grid">
-            <div class="advanced-group">
-              <div class="advanced-label">Sources</div>
-              <div class="advanced-option-row">
-                {% for source in sources %}
-                <label class="advanced-option">
-                  <input
-                    type="checkbox"
-                    name="source"
-                    value="{{ source.id }}"
-                    {% if not selected_sources or source.id in selected_sources %}checked{% endif %}
-                  >
-                  <span>{{ source.source_path }}</span>
-                </label>
-                {% endfor %}
-              </div>
-            </div>
-            <div class="advanced-group">
-              <div class="advanced-label">Search in</div>
-              <div class="advanced-option-row">
-                {% for value in all_unit_types %}
-                <label class="advanced-option">
-                  <input type="checkbox" name="unit_type" value="{{ value }}" {% if value in selected_unit_types %}checked{% endif %}>
-                  <span>{{ value|capitalize }}</span>
-                </label>
-                {% endfor %}
-              </div>
-            </div>
-            <div class="advanced-group advanced-group-wide">
-              <label class="advanced-label" for="vector_min_score_ai">Semantic match strictness</label>
-              <input
-                id="vector_min_score_ai"
-                name="vector_min_score"
-                type="range"
-                min="0"
-                max="1"
-                step="0.01"
-                value="{{ vector_min_score }}"
-                class="threshold-slider"
-                data-threshold-output="vector_min_score_ai_value"
-              >
-              <div class="slider-legend">
-                <strong id="vector_min_score_ai_value">{{ "%.2f"|format(vector_min_score) }}</strong>
-                <span>Strict</span>
-              </div>
-              <div class="advanced-help">0.00 keeps all semantic hits. Higher values filter out weaker semantic matches.</div>
+  <div class="ai-topbar-tools">
+    <details class="advanced-toggle">
+      <summary class="advanced-icon-button" aria-label="Advanced settings" title="Advanced settings">&#9881;</summary>
+      <div class="advanced-flyout">
+        <form action="/ai-search" method="get" class="advanced-grid" data-search-form data-primary-search-form>
+          <input type="hidden" name="q" value="{{ query }}">
+          <div class="advanced-group">
+            <div class="advanced-label">Sources</div>
+            <div class="advanced-option-row">
+              {% for source in sources %}
+              <label class="advanced-option">
+                <input
+                  type="checkbox"
+                  name="source"
+                  value="{{ source.id }}"
+                  {% if not selected_sources or source.id in selected_sources %}checked{% endif %}
+                >
+                <span>{{ source.source_path }}</span>
+              </label>
+              {% endfor %}
             </div>
           </div>
-        </div>
-      </details>
-    </div>
-  </form>
+          <div class="advanced-group">
+            <div class="advanced-label">Search in</div>
+            <div class="advanced-option-row">
+              {% for value in all_unit_types %}
+              <label class="advanced-option">
+                <input type="checkbox" name="unit_type" value="{{ value }}" {% if value in selected_unit_types %}checked{% endif %}>
+                <span>{{ value|capitalize }}</span>
+              </label>
+              {% endfor %}
+            </div>
+          </div>
+          <div class="advanced-group advanced-group-wide">
+            <label class="advanced-label" for="vector_min_score_ai">Semantic match strictness</label>
+            <input
+              id="vector_min_score_ai"
+              name="vector_min_score"
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value="{{ vector_min_score }}"
+              class="threshold-slider"
+              data-threshold-output="vector_min_score_ai_value"
+            >
+            <div class="slider-legend">
+              <strong id="vector_min_score_ai_value">{{ "%.2f"|format(vector_min_score) }}</strong>
+              <span>Strict</span>
+            </div>
+            <div class="advanced-help">0.00 keeps all semantic hits. Higher values filter out weaker semantic matches.</div>
+          </div>
+        </form>
+      </div>
+    </details>
+  </div>
 </header>
 <main class="ai-layout">
   <section class="ai-search-intro">
-    <div class="ai-mode-kicker">AI responses grounded in your indexed sources</div>
+    <div class="ai-mode-kicker">Grounded answers from your indexed library</div>
     <h1>AI Mode</h1>
-    <p>Ask naturally. searChi searches the index, synthesizes a short answer, and cites the supporting passages below.</p>
+    <p>Ask naturally, get a grounded answer from your indexed sources, then continue with follow-up questions.</p>
   </section>
   <section class="results-column ai-results-column">
     <div data-results-error class="form-error" data-visible="false"></div>
@@ -93,7 +83,7 @@
         <div class="ai-user-bubble" data-ai-question>{% if query %}{{ query }}{% endif %}</div>
       </article>
 
-      <article class="ai-answer-shell">
+      <article class="ai-answer-shell{% if not query %} ai-answer-shell-empty{% endif %}">
         <div class="ai-turn-label">searChi</div>
         <p class="ai-answer-body" data-ai-answer>{% if query %}Thinking...{% else %}Ask a question and I'll answer from the indexed sources with citations.{% endif %}</p>
         <section class="ai-citations" data-ai-citations hidden>
@@ -104,14 +94,28 @@
     </section>
   </section>
 </main>
-<div class="ai-followup-bar">
+<section class="ai-bottom-bar">
   <form action="/ai-search" method="get" class="ai-followup-form" data-search-form data-followup-search-form>
     <div class="ai-followup-input-wrap">
+      <button type="button" class="ai-composer-icon" aria-label="Add context">+</button>
       <input type="text" name="q" value="{{ query }}" class="ai-followup-input" autocomplete="off" placeholder="Ask anything">
-      <button type="submit" class="ai-followup-submit">Ask</button>
+      {% for source in selected_sources %}
+      <input type="hidden" name="source" value="{{ source }}">
+      {% endfor %}
+      {% for value in selected_unit_types %}
+      <input type="hidden" name="unit_type" value="{{ value }}">
+      {% endfor %}
+      <input type="hidden" name="vector_min_score" value="{{ vector_min_score }}">
+      <div class="ai-composer-tools">
+        <button type="button" class="ai-composer-icon ai-composer-icon-mic" aria-label="Voice input">•</button>
+        <button type="submit" class="ai-mode-pill ai-mode-pill-active ai-mode-submit">
+          <span class="ai-mode-pill-icon" aria-hidden="true">✦</span>
+          <span>AI Mode</span>
+        </button>
+      </div>
     </div>
   </form>
-</div>
+</section>
 <script>
   (function () {
     document.querySelectorAll("[data-threshold-output]").forEach(function (input) {

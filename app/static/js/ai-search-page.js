@@ -1,10 +1,11 @@
 (() => {
   const forms = Array.from(document.querySelectorAll('[data-search-form]'));
   const primaryForm = document.querySelector('[data-primary-search-form]') || forms[0];
-  if (!primaryForm) {
+  const followupForm = document.querySelector('[data-followup-search-form]');
+  if (!primaryForm && !followupForm) {
     return;
   }
-  const followupForm = document.querySelector('[data-followup-search-form]');
+  const configSource = primaryForm || followupForm;
 
   const metaElement = document.querySelector('[data-results-meta]');
   const errorElement = document.querySelector('[data-results-error]');
@@ -63,13 +64,13 @@
     });
   };
 
-  const gatherPayload = (activeForm = primaryForm) => {
-    const queryInput = activeForm.querySelector('[name="q"]') || primaryForm.querySelector('[name="q"]');
-    const slider = primaryForm.querySelector('[name="vector_min_score"]');
-    const selectedSources = Array.from(primaryForm.querySelectorAll('input[name="source"]:checked'))
+  const gatherPayload = (activeForm = configSource) => {
+    const queryInput = activeForm?.querySelector('[name="q"]') || followupForm?.querySelector('[name="q"]');
+    const slider = configSource?.querySelector('[name="vector_min_score"]');
+    const selectedSources = Array.from(configSource?.querySelectorAll('input[name="source"]:checked') || [])
       .map((input) => Number(input.value))
       .filter((value) => !Number.isNaN(value));
-    const selectedUnits = Array.from(primaryForm.querySelectorAll('input[name="unit_type"]:checked'))
+    const selectedUnits = Array.from(configSource?.querySelectorAll('input[name="unit_type"]:checked') || [])
       .map((input) => input.value);
     return {
       q: queryInput ? queryInput.value : '',
@@ -208,7 +209,7 @@
     form.addEventListener('submit', performSearch);
   });
 
-  const queryInput = primaryForm.querySelector('[name="q"]') || followupForm?.querySelector('[name="q"]');
+  const queryInput = followupForm?.querySelector('[name="q"]') || primaryForm?.querySelector('[name="q"]');
   if (queryInput && queryInput.value.trim()) {
     performSearch();
   }
