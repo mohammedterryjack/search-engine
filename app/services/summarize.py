@@ -29,17 +29,13 @@ def _stream_passthrough_response(response):
 
 def summarize_single_result_stream(
     text: str,
-    image_data: str | None = None,
-    image_mime: str | None = None,
 ):
     settings = get_settings()
-    if not settings.enable_summarizer or (not text and not image_data):
+    if not settings.enable_summarizer or not text:
         return
 
     payload = {
         "text": text,
-        "image_data": image_data,
-        "image_mime": image_mime,
         "max_length": 150,  # ~2-3 sentences
         "min_length": 20,
         "stream": True,

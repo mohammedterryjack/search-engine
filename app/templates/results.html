@@ -7,11 +7,13 @@
     <div class="search-bar-row">
       <div class="search-input-wrap">
         <input type="text" name="q" value="{{ query }}" class="search-input" autocomplete="off" autofocus>
+        <div class="search-input-tools">
+          <a href="/ai-search" class="ai-mode-pill" aria-label="Open AI Mode">
+            <span class="ai-mode-pill-icon" aria-hidden="true">✦</span>
+            <span>AI Mode</span>
+          </a>
+        </div>
       </div>
-      <a href="/ai-search" class="ai-mode-button">
-        <span class="ai-mode-icon">🤖</span>
-        AI Mode
-      </a>
       <details class="advanced-toggle">
         <summary class="advanced-icon-button" aria-label="Advanced settings" title="Advanced settings">&#9881;</summary>
         <div class="advanced-flyout">

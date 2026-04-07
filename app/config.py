@@ -5,12 +5,7 @@ from functools import lru_cache
 from dataclasses import dataclass
 from pathlib import Path
 
-
-def require_env(name: str) -> str:
-    value = os.getenv(name)
-    if value is None or value == "":
-        raise RuntimeError(f"Missing required environment variable: {name}")
-    return value
+from app.env import require_env
 
 
 @dataclass(frozen=True)
@@ -32,13 +27,6 @@ class Settings:
     summarizer_model: str
     summarizer_timeout: float
     ai_source_limit: int
-
-
-def default_data_dir() -> Path:
-    return (Path.home() / ".searchi").resolve()
-
-
-
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     data_dir = Path(require_env("SEARCHY_DATA_DIR")).resolve()

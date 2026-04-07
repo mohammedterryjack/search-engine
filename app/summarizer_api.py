@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import urllib.error
 import urllib.request
 from contextlib import asynccontextmanager
@@ -11,14 +10,9 @@ from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from app.env import require_env
+
 logger = logging.getLogger(__name__)
-
-
-def require_env(name: str) -> str:
-    value = os.getenv(name)
-    if value is None or value == "":
-        raise RuntimeError(f"Missing required environment variable: {name}")
-    return value
 
 
 OLLAMA_URL = require_env("OLLAMA_URL").rstrip("/")
@@ -127,8 +121,6 @@ app = FastAPI(lifespan=lifespan)
 
 class SummarizeRequest(BaseModel):
     text: str
-    image_data: str | None = None
-    image_mime: str | None = None
     max_length: int = 150
     min_length: int = 20
     stream: bool = False
@@ -138,8 +130,6 @@ class AnswerSource(BaseModel):
     id: int
     citation: str
     text: str
-    image_data: str | None = None
-    image_mime: str | None = None
 
 
 class AnswerRequest(BaseModel):
@@ -152,7 +142,8 @@ def _build_answer_messages(question: str, sources: list[AnswerSource]) -> list[d
     system_prompt = (
         "You are a careful research assistant. "
         "Answer the user's question using only the provided sources. "
-        "Be concise, direct, and factual. "
+        "Be direct, clear, and factual. "
+        "Give a complete answer when the sources support it, not an artificially short one. "
         "Cite every substantive claim with source ids in square brackets, like [1] or [2]. "
         "If a sentence relies on more than one source, cite all relevant ids. "
         "If the sources do not contain enough information to answer fully, say so explicitly. "
@@ -179,19 +170,16 @@ def _build_answer_messages(question: str, sources: list[AnswerSource]) -> list[d
             "content": (
                 f"<source id=\"{source.id}\" citation=\"{source.citation}\">\n"
                 f"{source.text.strip()}\n"
-                "</source>\n"
-                "If an image is attached to this message, treat it as part of the same source."
+                "</source>"
             ),
         }
-        if source.image_data:
-            source_message["images"] = [source.image_data]
         messages.append(source_message)
     messages.append(
         {
             "role": "user",
             "content": (
                 "Answer the question using only the numbered sources already provided. "
-                "Write a concise answer with inline citations."
+                "Write a complete answer with inline citations."
             ),
         }
     )
@@ -202,14 +190,6 @@ def _build_answer_messages(question: str, sources: list[AnswerSource]) -> list[d
 async def summarize(request: SummarizeRequest):
     try:
         messages = _build_messages(request.text, request.min_length, request.max_length)
-        if request.image_data and len(messages) > 1:
-            user_message = dict(messages[1])
-            user_message["content"] = (
-                f"{user_message['content']}\n\n"
-                "If an image is attached, use it as additional context for the summary."
-            )
-            user_message["images"] = [request.image_data]
-            messages[1] = user_message
         payload = {
             "model": SUMMARY_MODEL,
             "messages": messages,
@@ -247,7 +227,7 @@ async def answer(request: AnswerRequest):
             "stream": request.stream,
             "options": {
                 "temperature": 0.1,
-                "num_predict": 512,
+                "num_predict": 1024,
                 "num_ctx": OLLAMA_NUM_CTX,
             },
         }

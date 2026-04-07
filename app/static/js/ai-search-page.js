@@ -1,13 +1,17 @@
 (() => {
-  const form = document.querySelector('[data-search-form]');
-  if (!form) {
+  const forms = Array.from(document.querySelectorAll('[data-search-form]'));
+  const primaryForm = document.querySelector('[data-primary-search-form]') || forms[0];
+  if (!primaryForm) {
     return;
   }
+  const followupForm = document.querySelector('[data-followup-search-form]');
 
   const metaElement = document.querySelector('[data-results-meta]');
   const errorElement = document.querySelector('[data-results-error]');
   const warningElement = document.querySelector('[data-results-warning]');
   const answerElement = document.querySelector('[data-ai-answer]');
+  const questionElement = document.querySelector('[data-ai-question]');
+  const userTurnElement = document.querySelector('[data-ai-user-turn]');
   const citationsSection = document.querySelector('[data-ai-citations]');
   const citationList = document.querySelector('[data-ai-citation-list]');
   const endpoint = '/api/ai-search';
@@ -50,13 +54,22 @@
     )).join('');
   };
 
-  const gatherPayload = () => {
-    const queryInput = form.querySelector('[name="q"]');
-    const slider = form.querySelector('[name="vector_min_score"]');
-    const selectedSources = Array.from(form.querySelectorAll('input[name="source"]:checked'))
+  const setQueryValue = (value = '') => {
+    forms.forEach((form) => {
+      const queryInput = form.querySelector('[name="q"]');
+      if (queryInput) {
+        queryInput.value = value;
+      }
+    });
+  };
+
+  const gatherPayload = (activeForm = primaryForm) => {
+    const queryInput = activeForm.querySelector('[name="q"]') || primaryForm.querySelector('[name="q"]');
+    const slider = primaryForm.querySelector('[name="vector_min_score"]');
+    const selectedSources = Array.from(primaryForm.querySelectorAll('input[name="source"]:checked'))
       .map((input) => Number(input.value))
       .filter((value) => !Number.isNaN(value));
-    const selectedUnits = Array.from(form.querySelectorAll('input[name="unit_type"]:checked'))
+    const selectedUnits = Array.from(primaryForm.querySelectorAll('input[name="unit_type"]:checked'))
       .map((input) => input.value);
     return {
       q: queryInput ? queryInput.value : '',
@@ -114,13 +127,25 @@
     }
   };
 
+  const renderQuestion = (question = '') => {
+    if (questionElement) {
+      questionElement.textContent = question;
+    }
+    if (userTurnElement) {
+      userTurnElement.hidden = !question;
+    }
+  };
+
   const performSearch = async (event) => {
     if (event) {
       event.preventDefault();
     }
-    const payload = gatherPayload();
+    const activeForm = event?.currentTarget || primaryForm;
+    const payload = gatherPayload(activeForm);
+    setQueryValue(payload.q);
     renderMessages(null, null);
     renderCitations([]);
+    renderQuestion(payload.q);
     if (answerElement) {
       answerElement.textContent = payload.q ? '' : 'Ask a question and I’ll answer from the indexed sources with citations.';
     }
@@ -179,9 +204,11 @@
     }
   };
 
-  form.addEventListener('submit', performSearch);
+  forms.forEach((form) => {
+    form.addEventListener('submit', performSearch);
+  });
 
-  const queryInput = form.querySelector('[name="q"]');
+  const queryInput = primaryForm.querySelector('[name="q"]') || followupForm?.querySelector('[name="q"]');
   if (queryInput && queryInput.value.trim()) {
     performSearch();
   }

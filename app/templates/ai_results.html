@@ -1,12 +1,19 @@
 {% extends "base.html" %}
 {% block title %}{{ query or 'AI Search' }} - searChi{% endblock %}
+{% block body_class %}ai-search-body{% endblock %}
 {% block body %}
 <header class="topbar">
   <a href="/" class="brand brand-small"><span class="brand-letter">s</span><span class="brand-letter">e</span><span class="brand-letter">a</span><span class="brand-letter">r</span><span class="brand-letter">C</span><span class="brand-letter">h</span><span class="brand-letter">i</span></a>
-  <form action="/ai-search" method="get" class="search-form results-search-form" data-search-form>
+  <form action="/ai-search" method="get" class="search-form results-search-form" data-search-form data-primary-search-form>
     <div class="search-bar-row">
       <div class="search-input-wrap">
         <input type="text" name="q" value="{{ query }}" class="search-input" autocomplete="off" autofocus>
+        <div class="search-input-tools">
+          <span class="ai-mode-pill ai-mode-pill-active" aria-current="page">
+            <span class="ai-mode-pill-icon" aria-hidden="true">✦</span>
+            <span>AI Mode</span>
+          </span>
+        </div>
       </div>
       <details class="advanced-toggle">
         <summary class="advanced-icon-button" aria-label="Advanced settings" title="Advanced settings">&#9881;</summary>
@@ -65,39 +72,46 @@
   </form>
 </header>
 <main class="ai-layout">
-  <section class="ai-hero-card">
-    <div>
-      <h1>AI Mode</h1>
-      <p>Ask a question and get a concise answer synthesized from the freshest indexed content. Every claim is footnoted with the source that backs it.</p>
-    </div>
-    <div class="ai-hero-badge">Streamed answer</div>
+  <section class="ai-search-intro">
+    <div class="ai-mode-kicker">AI responses grounded in your indexed sources</div>
+    <h1>AI Mode</h1>
+    <p>Ask naturally. searChi searches the index, synthesizes a short answer, and cites the supporting passages below.</p>
   </section>
-  <section class="results-column">
+  <section class="results-column ai-results-column">
     <div data-results-error class="form-error" data-visible="false"></div>
     <div data-results-warning class="form-success" data-visible="false"></div>
 
-    <div class="results-meta" data-results-meta>
+    <div class="results-meta ai-results-meta" data-results-meta>
       {% if query %}
       Generating answer
       {% endif %}
     </div>
 
-    <article class="result-card">
-      <h2 class="result-title">AI Answer</h2>
-      <p class="ai-answer-body" data-ai-answer>
-      {% if query %}
-      Thinking...
-      {% else %}
-      Ask a question and I'll answer from the indexed sources with citations.
-      {% endif %}
-      </p>
-      <section class="ai-citations" data-ai-citations hidden>
-        <div class="result-subtitle">Citations</div>
-        <ol class="ai-citation-list" data-ai-citation-list></ol>
-      </section>
-    </article>
+    <section class="ai-thread">
+      <article class="ai-user-turn" data-ai-user-turn {% if not query %}hidden{% endif %}>
+        <div class="ai-turn-label">You</div>
+        <div class="ai-user-bubble" data-ai-question>{% if query %}{{ query }}{% endif %}</div>
+      </article>
+
+      <article class="ai-answer-shell">
+        <div class="ai-turn-label">searChi</div>
+        <p class="ai-answer-body" data-ai-answer>{% if query %}Thinking...{% else %}Ask a question and I'll answer from the indexed sources with citations.{% endif %}</p>
+        <section class="ai-citations" data-ai-citations hidden>
+          <div class="ai-citations-title">Sources</div>
+          <ol class="ai-citation-list" data-ai-citation-list></ol>
+        </section>
+      </article>
+    </section>
   </section>
 </main>
+<div class="ai-followup-bar">
+  <form action="/ai-search" method="get" class="ai-followup-form" data-search-form data-followup-search-form>
+    <div class="ai-followup-input-wrap">
+      <input type="text" name="q" value="{{ query }}" class="ai-followup-input" autocomplete="off" placeholder="Ask anything">
+      <button type="submit" class="ai-followup-submit">Ask</button>
+    </div>
+  </form>
+</div>
 <script>
   (function () {
     document.querySelectorAll("[data-threshold-output]").forEach(function (input) {

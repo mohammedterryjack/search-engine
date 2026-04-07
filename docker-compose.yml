@@ -1,25 +1,25 @@
 x-searchi-model-env: &searchi-model-env
-  SEARCHY_SUMMARY_MODEL: qwen2.5:0.5b-instruct
-  SEARCHY_AI_MODEL: qwen2.5:0.5b-instruct
-  SEARCHY_SUMMARIZER_NUM_CTX: "32768"
+  SEARCHY_SUMMARY_MODEL: ${SEARCHY_SUMMARY_MODEL}
+  SEARCHY_AI_MODEL: ${SEARCHY_AI_MODEL}
+  SEARCHY_SUMMARIZER_NUM_CTX: ${SEARCHY_SUMMARIZER_NUM_CTX}
 
 x-searchi-app-env: &searchi-app-env
-  SEARCHY_DATA_DIR: /searchi_data
-  SEARCHY_APP_DB_PATH: /searchi_data/app_data/searchy_app.sqlite3
-  SEARCHY_SOURCE_DB_DIR: /searchi_data/source_dbs
-  SEARCHY_ALLOWED_SOURCE_ROOT: /Users
-  SEARCHY_VECTOR_MODEL: sentence-transformers/all-MiniLM-L6-v2
-  SEARCHY_ENABLE_VECTOR_RETRIEVAL: "1"
-  SEARCHY_VECTOR_MIN_SCORE_DEFAULT: "0.2"
-  SEARCHY_RERANKER_URL: http://reranker:8010
-  SEARCHY_RERANKER_TIMEOUT: "15"
-  SEARCHY_STATUS_TOKEN: searchi-local-status
-  SEARCHY_ENABLE_RERANKER: "1"
-  SEARCHY_POLL_SECONDS: "3"
-  SEARCHY_ENABLE_SUMMARIZER: "1"
-  SEARCHY_SUMMARIZER_URL: http://summariser:8020
-  SEARCHY_SUMMARIZER_TIMEOUT: "180.0"
-  SEARCHY_AI_SOURCE_LIMIT: "8"
+  SEARCHY_DATA_DIR: ${SEARCHY_DATA_DIR}
+  SEARCHY_APP_DB_PATH: ${SEARCHY_APP_DB_PATH}
+  SEARCHY_SOURCE_DB_DIR: ${SEARCHY_SOURCE_DB_DIR}
+  SEARCHY_ALLOWED_SOURCE_ROOT: ${SEARCHY_ALLOWED_SOURCE_ROOT}
+  SEARCHY_VECTOR_MODEL: ${SEARCHY_VECTOR_MODEL}
+  SEARCHY_ENABLE_VECTOR_RETRIEVAL: ${SEARCHY_ENABLE_VECTOR_RETRIEVAL}
+  SEARCHY_VECTOR_MIN_SCORE_DEFAULT: ${SEARCHY_VECTOR_MIN_SCORE_DEFAULT}
+  SEARCHY_RERANKER_URL: ${SEARCHY_RERANKER_URL}
+  SEARCHY_RERANKER_TIMEOUT: ${SEARCHY_RERANKER_TIMEOUT}
+  SEARCHY_STATUS_TOKEN: ${SEARCHY_STATUS_TOKEN}
+  SEARCHY_ENABLE_RERANKER: ${SEARCHY_ENABLE_RERANKER}
+  SEARCHY_POLL_SECONDS: ${SEARCHY_POLL_SECONDS}
+  SEARCHY_ENABLE_SUMMARIZER: ${SEARCHY_ENABLE_SUMMARIZER}
+  SEARCHY_SUMMARIZER_URL: ${SEARCHY_SUMMARIZER_URL}
+  SEARCHY_SUMMARIZER_TIMEOUT: ${SEARCHY_SUMMARIZER_TIMEOUT}
+  SEARCHY_AI_SOURCE_LIMIT: ${SEARCHY_AI_SOURCE_LIMIT}
 
 services:
   web:
@@ -35,7 +35,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       <<: [*searchi-app-env, *searchi-model-env]
-      HF_HOME: /root/.cache/huggingface
+      HF_HOME: ${HF_HOME}
     depends_on:
       reranker:
         condition: service_started
@@ -53,7 +53,7 @@ services:
       - /Users:/Users:ro
     environment:
       <<: [*searchi-app-env, *searchi-model-env]
-      HF_HOME: /root/.cache/huggingface
+      HF_HOME: ${HF_HOME}
     deploy:
       replicas: 1
       labels:
@@ -80,22 +80,22 @@ services:
       - ${HOME}/.searchi/model_cache:/root/.cache
     environment:
       SEARCHY_ENABLE_RERANKER: "0"
-      SEARCHY_STATUS_TOKEN: searchi-local-status
-      SEARCHY_RERANKER_MODEL: cross-encoder/ms-marco-MiniLM-L4-v2
-      SEARCHY_RERANKER_BATCH_SIZE: "16"
-      HF_HOME: /root/.cache/huggingface
+      SEARCHY_STATUS_TOKEN: ${SEARCHY_STATUS_TOKEN}
+      SEARCHY_RERANKER_MODEL: ${SEARCHY_RERANKER_MODEL}
+      SEARCHY_RERANKER_BATCH_SIZE: ${SEARCHY_RERANKER_BATCH_SIZE}
+      HF_HOME: ${HF_HOME}
 
   ollama:
     image: ollama/ollama:latest
     entrypoint: ["/bin/sh", "/app/scripts/init-ollama.sh"]
     labels:
       - "searchi.service=ollama"
-      - "searchi.model=summary=qwen2.5:0.5b-instruct,answer=qwen2.5:0.5b-instruct"
+      - "searchi.model=summary=${SEARCHY_SUMMARY_MODEL},answer=${SEARCHY_AI_MODEL}"
     volumes:
       - .:/app
       - ${HOME}/.searchi/ollama:/root/.ollama
     environment:
-      OLLAMA_HOST: 0.0.0.0:11434
+      OLLAMA_HOST: ${OLLAMA_HOST}
       <<: *searchi-model-env
     healthcheck:
       test: ["CMD-SHELL", "ollama list | grep -q \"^$$SEARCHY_SUMMARY_MODEL[[:space:]]\" && ollama list | grep -q \"^$$SEARCHY_AI_MODEL[[:space:]]\""]
@@ -109,16 +109,16 @@ services:
     command: uvicorn app.summarizer_api:app --host 0.0.0.0 --port 8020
     labels:
       - "searchi.service=summariser"
-      - "searchi.model=summary=qwen2.5:0.5b-instruct,answer=qwen2.5:0.5b-instruct"
+      - "searchi.model=summary=${SEARCHY_SUMMARY_MODEL},answer=${SEARCHY_AI_MODEL}"
     ports:
       - "11435:8020"
     volumes:
       - .:/app
     environment:
-      OLLAMA_URL: http://ollama:11434
+      OLLAMA_URL: ${OLLAMA_URL}
       <<: *searchi-model-env
-      SEARCHY_SUMMARIZER_TIMEOUT: "180.0"
-      SEARCHY_AI_SOURCE_LIMIT: "8"
+      SEARCHY_SUMMARIZER_TIMEOUT: ${SEARCHY_SUMMARIZER_TIMEOUT}
+      SEARCHY_AI_SOURCE_LIMIT: ${SEARCHY_AI_SOURCE_LIMIT}
     depends_on:
       ollama:
         condition: service_healthy

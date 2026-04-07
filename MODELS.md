@@ -1,99 +1,73 @@
 # Models Used in SearChi
 
-This document lists all the machine learning models used across SearChi's services.
+This document describes the current model setup in the repo.
 
-## Document Parsing (Parser Service)
+## Current Runtime
 
-**Service**: `parser` (3 replicas)  
-**Purpose**: Extract text, tables, figures, and structure from documents
+Shared model settings are defined in [`/.env`](/Users/mohammed/Code/search_engine/.env) and wired through [`/docker-compose.yml`](/Users/mohammed/Code/search_engine/docker-compose.yml).
 
-### Docling
-- **Model**: Multiple models from [DS4SD/Docling](https://github.com/DS4SD/docling)
-  - Layout detection: `docling-layout-heron` (~172MB)
-  - Document understanding: `SmolDocling-256M-preview` (770 weights)
-- **Backend**: ONNX Runtime (optimized for CPU inference)
-- **Memory**: ~2.6GB peak per document
-- **Supported formats**: PDF, DOCX, PPTX, XLSX, HTML, MD, images
+- Summary model: `qwen2.5:0.5b-instruct`
+- AI answer model: `qwen2.5:0.5b-instruct`
+- Ollama context size: `4096`
 
-### RapidOCR
-- **Models**: PP-OCRv4 (ONNX format)
-  - Text detection: `ch_PP-OCRv4_det_infer.onnx` (~14MB)
-  - Text classification: `ch_ppocr_mobile_v2.0_cls_infer.onnx` (~0.6MB)
-  - Text recognition: `ch_PP-OCRv4_rec_infer.onnx` (~26MB)
-- **Backend**: ONNX Runtime
-- **Purpose**: OCR for scanned documents and images
+The summariser and AI answer path are currently text-only. Search results may still contain figure images for UI display, but image payloads are not forwarded to the Ollama model while using `qwen2.5`.
 
-## Text Summarization (Summariser Service)
+## Document Parsing
 
-**Service**: `summariser`  
-**Model**: [Falconsai/text_summarization](https://huggingface.co/Falconsai/text_summarization)  
-**Architecture**: T5-small (Seq2Seq)  
-**Size**: ~244MB  
-**Purpose**: Generate concise summaries of search results  
-**Max input**: 512 tokens  
-**Output**: 10-50 tokens (configurable)
+Service: `parser`
 
-## Result Reranking (Reranker Service)
+- Primary stack: Docling
+- OCR stack: RapidOCR / PP-OCRv4
+- Purpose: extract text, figures, tables, and structure from indexed documents
+- Runtime note: parser is configured for 1 replica in [`/docker-compose.yml`](/Users/mohammed/Code/search_engine/docker-compose.yml)
 
-**Service**: `reranker`  
-**Model**: [cross-encoder/ms-marco-MiniLM-L4-v2](https://huggingface.co/cross-encoder/ms-marco-MiniLM-L4-v2)  
-**Architecture**: MiniLM-L4 (Cross-encoder)  
-**Size**: ~50MB  
-**Purpose**: Rerank search results by query relevance  
-**Batch size**: 16
+## Summaries And AI Answers
 
-## Vector Search (Web Service)
+Services: `summariser` + `ollama`
 
-**Service**: `web`  
-**Model**: [sentence-transformers/all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2)  
-**Architecture**: MiniLM-L6 (Bi-encoder)  
-**Size**: ~90MB  
-**Purpose**: Generate embeddings for semantic search  
-**Vector dimensions**: 384  
-**Backend**: FAISS (CPU)
+- Runtime: Ollama
+- Summary model: `qwen2.5:0.5b-instruct`
+- AI answer model: `qwen2.5:0.5b-instruct`
+- Summary behavior: short, 2-3 sentence summaries for individual results
+- AI answer behavior: fuller cited answers grounded in retrieved search sources
 
-## Model Caching
+Model artifacts are stored outside the container in:
 
-All Hugging Face models are cached at:
-```
-~/.searchi/model_cache/huggingface/
+```text
+~/.searchi/ollama
 ```
 
-This prevents re-downloading models and saves container disk space.
+## Result Reranking
 
-## Memory Requirements
+Service: `reranker`
 
-| Service | Memory Limit | Memory Reservation |
-|---------|-------------|-------------------|
-| Parser  | 4GB         | 1GB               |
-| Summariser | Default  | Default           |
-| Reranker | Default   | Default           |
-| Web     | Default     | Default           |
+- Model: `cross-encoder/ms-marco-MiniLM-L4-v2`
+- Purpose: rerank top search hits against the user query
+- Batch size: `16`
 
-## Performance Notes
+Hugging Face cache path:
 
-- **Parser**: Uses ONNX Runtime instead of PyTorch for 3-5x better memory efficiency
-- **Vector Search**: FAISS indexing is CPU-only but fast for <100k documents
-- **Summariser**: T5-small is 12x smaller than previous qwen2.5 model
-- **Reranker**: Cross-encoder provides better relevance than bi-encoder alone
-
-## Model Updates
-
-To update models, modify the respective service configuration:
-
-```yaml
-# docker-compose.yml
-parser:
-  labels:
-    - "searchi.model=docling"  # Update here
-
-summariser:
-  labels:
-    - "searchi.model=Falconsai/text_summarization"  # Update here
-
-reranker:
-  environment:
-    SEARCHY_RERANKER_MODEL: cross-encoder/ms-marco-MiniLM-L4-v2  # Update here
+```text
+~/.searchi/model_cache/huggingface
 ```
 
-Then rebuild: `docker compose up --build -d`
+## Semantic Search
+
+Services: `web` and `parser`
+
+- Embedding model: `sentence-transformers/all-MiniLM-L6-v2`
+- Vector dimensions: `384`
+- Backend: FAISS on CPU
+- Purpose: semantic retrieval over indexed content units
+
+## Updating Models
+
+Change the model settings in [`/.env`](/Users/mohammed/Code/search_engine/.env), then recreate the affected services.
+
+Typical restart command:
+
+```bash
+docker compose up -d --force-recreate ollama summariser web parser
+```
+
+If you change reranker settings, recreate `reranker` too.

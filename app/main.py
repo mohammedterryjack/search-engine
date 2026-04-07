@@ -184,8 +184,6 @@ def _build_ai_source_payload(results: list[SearchResult]) -> tuple[list[dict[str
                 "id": next_id,
                 "citation": label,
                 "text": text,
-                "image_data": result.image_data,
-                "image_mime": result.image_mime,
             }
         )
         refs.append(AiSearchSourceRef(id=next_id, label=label))
@@ -515,8 +513,6 @@ async def api_ai_search(payload: SearchApiRequest) -> StreamingResponse:
 
 class SummarizeSingleRequest(BaseModel):
     text: str
-    image_data: str | None = None
-    image_mime: str | None = None
 
 
 @app.post("/api/summarize-single")
@@ -527,8 +523,6 @@ async def api_summarize_single(payload: SummarizeSingleRequest):
     return StreamingResponse(
         summarize_single_result_stream(
             payload.text,
-            image_data=payload.image_data,
-            image_mime=payload.image_mime,
         ),
         media_type="text/event-stream"
     )
