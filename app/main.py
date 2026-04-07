@@ -548,8 +548,9 @@ async def sources_view(
     all_jobs = store.list_jobs()
     global_job_counts = store.job_status_counts()
     running_jobs = [job for job in all_jobs if str(job["status"]) == "running"][:10]
+    recent_job_statuses = {"pending", "running", "failed"}
     recent_jobs = [
-        job for job in all_jobs if str(job["status"]) in {"pending", "failed"}
+        job for job in all_jobs if str(job["status"]) in recent_job_statuses
     ][:20]
     for source in store.list_source_roots():
         source_store = SourceStore(Path(str(source["db_path"])))
