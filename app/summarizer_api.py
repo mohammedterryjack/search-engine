@@ -5,6 +5,7 @@ import logging
 import urllib.error
 import urllib.request
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
@@ -13,6 +14,11 @@ from pydantic import BaseModel
 from app.env import require_env
 
 logger = logging.getLogger(__name__)
+
+# Load prompts from files
+PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
+SUMMARIZE_PROMPT = (PROMPTS_DIR / "summarize.txt").read_text().strip()
+ANSWER_PROMPT = (PROMPTS_DIR / "answer.txt").read_text().strip()
 
 
 OLLAMA_URL = require_env("OLLAMA_URL").rstrip("/")
@@ -24,15 +30,7 @@ OLLAMA_NUM_CTX = int(require_env("SEARCHY_SUMMARIZER_NUM_CTX"))
 
 def _build_messages(text: str, min_length: int, max_length: int) -> list[dict[str, str]]:
     trimmed = text.strip()
-    system_prompt = (
-        "You are a careful summarization assistant. "
-        "Summarize the provided text faithfully and concisely. "
-        "Keep only the main claims, findings, and conclusions. "
-        "Do not add information that is not present in the source. "
-        "Do not use bullet points. "
-        f"Write 2 to 3 sentences, aiming for roughly {min_length} to {max_length} words. "
-        "If the text is too short to summarize, return a one-sentence restatement."
-    )
+    system_prompt = SUMMARIZE_PROMPT.format(max_length=max_length)
     user_prompt = f"Summarize the following text.\n\n<text>\n{trimmed}\n</text>"
     return [
         {"role": "system", "content": system_prompt},
@@ -139,18 +137,7 @@ class AnswerRequest(BaseModel):
 
 
 def _build_answer_messages(question: str, sources: list[AnswerSource]) -> list[dict[str, object]]:
-    system_prompt = (
-        "You are a careful research assistant. "
-        "Answer the user's question using only the provided sources. "
-        "Be direct, clear, and factual. "
-        "Give a complete answer when the sources support it, not an artificially short one. "
-        "Cite every substantive claim with source ids in square brackets, like [1] or [2]. "
-        "If a sentence relies on more than one source, cite all relevant ids. "
-        "If the sources do not contain enough information to answer fully, say so explicitly. "
-        "Do not use bullet points unless the user asks for them. "
-        "Do not invent facts, quotes, or citations. "
-        "Return only the answer text."
-    )
+    system_prompt = ANSWER_PROMPT
     messages: list[dict[str, object]] = [
         {"role": "system", "content": system_prompt},
     ]
