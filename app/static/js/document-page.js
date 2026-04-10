@@ -21,7 +21,7 @@ import { bindResultInteractions, renderResultCard } from './result-card-utils.js
       return;
     }
     resultsContainer.innerHTML = results.map((result) => renderResultCard(result, {
-      summaryText: result.text_content || '',
+      query: '',
     })).join('');
   };
 

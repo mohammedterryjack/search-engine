@@ -215,6 +215,7 @@ def lexical_search_source_db(
                 section_name=str(entry["section_name"]),
                 score=score,
                 text_content=str(entry["text_content"]),
+                caption=str(entry["caption"]) if entry["caption"] is not None else "",
                 image_mime=entry["image_mime"],
                 image_data=entry["image_data"],
             )
@@ -267,6 +268,7 @@ def semantic_search_source_db(
                     section_name=str(row["section_name"]) if row["section_name"] is not None else "",
                     score=float(score),
                     text_content=str(row["text_content"]) if row["text_content"] is not None else "",
+                    caption=str(row["caption"]) if row["caption"] is not None else "",
                     image_mime=row["image_mime"],
                     image_data=row["image_data"],
                 )

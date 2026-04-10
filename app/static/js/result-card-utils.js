@@ -1,3 +1,8 @@
+const STOP_WORDS = new Set([
+  'a', 'an', 'and', 'are', 'as', 'at', 'be', 'by', 'for', 'from', 'has', 'he',
+  'in', 'is', 'it', 'its', 'of', 'on', 'that', 'the', 'to', 'was', 'will', 'with'
+]);
+
 export const escapeHtml = (value = '') => {
   const div = document.createElement('div');
   div.textContent = value;
@@ -13,18 +18,54 @@ export const truncateText = (text = '', limit = 320) => {
   return `${text.slice(0, limit - 1).replace(/\s+$/, '')}\u2026`;
 };
 
+const normalizedTerms = (query = '') => {
+  const tokens = String(query).match(/[A-Za-z0-9]+/g) || [];
+  const normalized = tokens
+    .map(token => token.toLowerCase())
+    .filter(token => token && !STOP_WORDS.has(token));
+  return new Set(normalized);
+};
+
+export const highlightText = (text = '', query = '') => {
+  const matchedTerms = normalizedTerms(query);
+  if (!matchedTerms.size) {
+    return escapeHtml(text);
+  }
+
+  let result = '';
+  let lastIndex = 0;
+  const wordRe = /[A-Za-z0-9]+/g;
+  let match;
+
+  while ((match = wordRe.exec(text)) !== null) {
+    const start = match.index;
+    const end = start + match[0].length;
+    result += escapeHtml(text.slice(lastIndex, start));
+    const surface = match[0];
+    const escapedSurface = escapeHtml(surface);
+    if (matchedTerms.has(surface.toLowerCase())) {
+      result += `<mark>${escapedSurface}</mark>`;
+    } else {
+      result += escapedSurface;
+    }
+    lastIndex = end;
+  }
+
+  result += escapeHtml(text.slice(lastIndex));
+  return result;
+};
+
 export const renderResultCard = (result, options = {}) => {
   const {
-    summaryText = result.text_content || '',
-    snippetHtml = '',
+    query = '',
   } = options;
   const sectionLabel = result.section_name || 'Untitled';
   const titleText = result.unit_type === 'section'
     ? sectionLabel
     : `${capitalize(result.unit_type)} · ${sectionLabel}`;
   const displayText = (result.text_content || '').trim();
-  const truncatedSnippetHtml = escapeHtml(truncateText(displayText));
-  const renderedSnippetHtml = snippetHtml || result.highlighted_text || truncatedSnippetHtml;
+  const truncatedText = truncateText(displayText);
+  const renderedSnippetHtml = highlightText(truncatedText, query);
   const subtitleParts = [`<span>${escapeHtml(result.unit_type)}</span>`];
   if (typeof result.page_number === 'number' && !Number.isNaN(result.page_number)) {
     subtitleParts.push(`<span>Page ${result.page_number}</span>`);
@@ -54,12 +95,13 @@ export const renderResultCard = (result, options = {}) => {
         class="result-snippet"
         title="Click to expand"
         data-full-text="${escapeHtml(displayText)}"
+        data-query="${escapeHtml(query)}"
       >${renderedSnippetHtml}</p>
       <div class="result-summary-container" data-result-summary>
         <button
           class="result-summarize-btn"
           data-summarize-result
-          data-result-text="${escapeHtml(summaryText)}"
+          data-result-text="${escapeHtml(displayText)}"
           title="summarise"
           aria-label="summarise"
         >✨</button>
@@ -135,8 +177,9 @@ const handleSnippetExpand = (snippet) => {
 
   snippet.dataset.originalHtml = snippet.innerHTML;
   const fullText = snippet.dataset.fullText;
+  const query = snippet.dataset.query || '';
   if (fullText) {
-    snippet.textContent = fullText;
+    snippet.innerHTML = highlightText(fullText, query);
   }
   snippet.classList.add('expanded');
   snippet.title = 'Click to collapse';

@@ -54,13 +54,21 @@ def _ollama_tags() -> dict[str, object]:
         return json.loads(response.read().decode("utf-8"))
 
 
-def _model_available() -> bool:
+def _model_available(model_name: str) -> bool:
     data = _ollama_tags()
     models = data.get("models", [])
     available = {str(model.get("name", "")) for model in models if isinstance(model, dict)}
-    summary_aliases = {SUMMARY_MODEL, f"{SUMMARY_MODEL}:latest"}
-    ai_aliases = {AI_MODEL, f"{AI_MODEL}:latest"}
-    return bool(available & summary_aliases) and bool(available & ai_aliases)
+    model_aliases = {model_name, f"{model_name}:latest"}
+    return bool(available & model_aliases)
+
+
+def _pull_model(model_name: str) -> None:
+    logger.info("Pulling Ollama model %s...", model_name)
+    request = _ollama_request("/api/pull", {"name": model_name, "stream": False})
+    with urllib.request.urlopen(request, timeout=600) as response:
+        data = json.loads(response.read().decode("utf-8"))
+    if data.get("error"):
+        raise RuntimeError(f"Failed to pull {model_name}: {data['error']}")
 
 
 def _warm_model(model_name: str) -> None:
@@ -107,10 +115,10 @@ async def lifespan(app: FastAPI):
         AI_MODEL,
         OLLAMA_URL,
     )
-    if not _model_available():
-        raise RuntimeError(
-            f"Ollama models {SUMMARY_MODEL} and/or {AI_MODEL} are not available"
-        )
+    if not _model_available(SUMMARY_MODEL):
+        _pull_model(SUMMARY_MODEL)
+    if not _model_available(AI_MODEL):
+        _pull_model(AI_MODEL)
     _warm_model(SUMMARY_MODEL)
     _warm_model(AI_MODEL)
     yield
@@ -240,7 +248,7 @@ async def answer(request: AnswerRequest):
 @app.get("/health")
 async def health():
     try:
-        if _model_available():
+        if _model_available(SUMMARY_MODEL) and _model_available(AI_MODEL):
             return {
                 "status": "healthy",
                 "model": f"summary={SUMMARY_MODEL}; answer={AI_MODEL}",

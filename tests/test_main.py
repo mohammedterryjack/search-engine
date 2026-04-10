@@ -96,6 +96,16 @@ def test_summarizer_health_uses_service_health_endpoint(monkeypatch) -> None:
         "status": "ok",
         "model_name": "Falconsai/text_summarization",
         "url": "http://summariser:8020",
+        "summary_model": "Falconsai/text_summarization",
+        "answer_model": "",
+        "summary": {
+            "status": "ok",
+            "model_name": "Falconsai/text_summarization",
+        },
+        "answer": {
+            "status": "ok",
+            "model_name": "",
+        },
     }
 
 

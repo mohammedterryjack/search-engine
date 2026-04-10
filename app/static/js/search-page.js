@@ -23,8 +23,7 @@ import { bindResultInteractions, renderResultCard } from './result-card-utils.js
       return;
     }
     resultsContainer.innerHTML = results.map((result) => renderResultCard(result, {
-      summaryText: result.text_content || '',
-      snippetHtml: result.highlighted_text || '',
+      query: query,
     })).join('');
   };
 

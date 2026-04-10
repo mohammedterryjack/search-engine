@@ -113,6 +113,7 @@
           class="result-snippet"
           title="Click to expand"
           data-full-text="{{ result.text_content|e }}"
+          data-query="{{ query|e }}"
         >{{ result.highlighted_text|safe }}</p>
         <div class="result-summary-container" data-result-summary>
           <button

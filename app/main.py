@@ -150,11 +150,7 @@ def _serialize_search_results(results: list[SearchResult]) -> list[dict[str, obj
 
 
 def _apply_highlights(results: list[SearchResult], query: str) -> None:
-    if not results:
-        return
-    for result in results:
-        snippet = truncate_text(result.text_content or "", SNIPPET_CHAR_LIMIT)
-        result.highlighted_text = highlight_terms(snippet, query)
+    pass
 
 
 def _ai_source_label(result: SearchResult, source_id: int) -> str:
@@ -803,6 +799,7 @@ def _get_document_sections(source_root_id: int, document_id: int) -> list[Search
             unit_type=str(row["unit_type"]),
             page_number=int(row["page_number"]) if row["page_number"] is not None else None,
             section_name=str(row["section_name"]) if row["section_name"] is not None else "",
+            caption=str(row["caption"]) if row["caption"] is not None else "",
             image_mime=row["image_mime"],
             image_data=row["image_data"],
             score=0.0,

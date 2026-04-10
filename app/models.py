@@ -16,6 +16,7 @@ class SearchResult:
     section_name: str
     score: float
     text_content: str | None = None
+    caption: str = ""
     image_mime: str | None = None
     image_data: str | None = None
     highlighted_text: str | None = None
