@@ -7,10 +7,10 @@ This document describes the current model setup in the repo.
 Shared model settings are defined in [`/.env`](/Users/mohammed/Code/search_engine/.env) and wired through [`/docker-compose.yml`](/Users/mohammed/Code/search_engine/docker-compose.yml).
 
 - Summary model: `qwen2.5:0.5b-instruct`
-- AI answer model: `qwen2.5:0.5b-instruct`
+- AI answer model: `gpt-oss`
 - Ollama context size: `4096`
 
-The summariser and AI answer path are currently text-only. Search results may still contain figure images for UI display, but image payloads are not forwarded to the Ollama model while using `qwen2.5`.
+The summariser and AI answer path are currently text-only. Search results may still contain figure images for UI display, but image payloads are not forwarded to the Ollama model.
 
 ## Document Parsing
 
@@ -27,14 +27,14 @@ Services: `summariser` + `ollama`
 
 - Runtime: Ollama
 - Summary model: `qwen2.5:0.5b-instruct`
-- AI answer model: `qwen2.5:0.5b-instruct`
+- AI answer model: `gpt-oss`
 - Summary behavior: short, 2-3 sentence summaries for individual results
 - AI answer behavior: fuller cited answers grounded in retrieved search sources
 
 Model artifacts are stored outside the container in:
 
 ```text
-~/.searchi/ollama
+~/.ollama
 ```
 
 ## Result Reranking

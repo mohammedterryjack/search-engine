@@ -58,7 +58,9 @@ def _model_available() -> bool:
     data = _ollama_tags()
     models = data.get("models", [])
     available = {str(model.get("name", "")) for model in models if isinstance(model, dict)}
-    return SUMMARY_MODEL in available and AI_MODEL in available
+    summary_aliases = {SUMMARY_MODEL, f"{SUMMARY_MODEL}:latest"}
+    ai_aliases = {AI_MODEL, f"{AI_MODEL}:latest"}
+    return bool(available & summary_aliases) and bool(available & ai_aliases)
 
 
 def _warm_model(model_name: str) -> None:

@@ -13,7 +13,7 @@ SearChi is a local document search engine with:
 
 - `web`: FastAPI UI and API
 - `parser`: background document parsing (Docling + RapidOCR)
-- `summariser`: text summarization and grounded-answer API backed by Ollama (`qwen3.5:0.8b`)
+- `summariser`: text summarization and grounded-answer API backed by Ollama (`qwen2.5:0.5b-instruct` for per-result summaries, `gpt-oss` for cited answers)
 - `reranker`: cross-encoder reranking service (MiniLM-L4)
 
 See [MODELS.md](MODELS.md) for detailed model information.
@@ -24,11 +24,11 @@ See [MODELS.md](MODELS.md) for detailed model information.
 make rebuild
 ```
 
-With the default local configuration, runtime data lives under `~/.searchi/`.
+With the default local configuration, app runtime data lives under `~/.searchi/`.
 
-The Docker Compose setup also points at the host `~/.searchi/` directory via a bind mount (so nothing is written to `./data/` anymore).
+The Docker Compose setup also points at the host `~/.searchi/` directory via a bind mount for app state, while Ollama models live under the host default `~/.ollama` directory.
 
-**Note:** On first startup, the Ollama service will automatically download the `qwen3.5:0.8b` model into `~/.searchi/ollama`. This may take a minute or two depending on your connection speed.
+**Note:** On first startup, the Ollama service will automatically download the configured Ollama models into the host's default Ollama directory at `~/.ollama`. By default this includes `qwen2.5:0.5b-instruct` for per-result summaries and `gpt-oss` for cited answers.
 
 ## HTTP API
 
@@ -59,16 +59,16 @@ Add `| jq` if you want the JSON response formatted.
 
 **Current Workarounds**:
 1. **Automatic handling**: Failed jobs can be manually retried from the Sources page if needed
-2. **Worker scaling**: System runs 3 workers @ 4GB each - works well for small/medium PDFs (<500KB)
-3. **For large PDFs**: Increase worker memory limit to 12GB and scale down to 1 worker:
+2. **Worker scaling**: Default compose keeps the parser at 1 replica so a single large Docling parse can use the full container memory budget
+3. **For large PDFs**: Increase worker memory limit and keep the parser at a single replica:
    ```yaml
    # In docker-compose.yml
-   worker:
+   parser:
      deploy:
        replicas: 1
        resources:
          limits:
-           memory: 12G
+           memory: 32G
    ```
 
 **Memory Optimizations Applied**:

@@ -41,7 +41,7 @@ This document reflects the current `SearChi` architecture as implemented, includ
                      +----------------------------+   +----------------------+
                      | Per-Source SQLite DB       |   | Summarizer Service   |
                      | one DB per whitelist path  |   | Ollama               |
-                     |                            |   | Qwen 0.5B Instruct   |
+                     |                            |   | Qwen + GPT OSS       |
                      | documents                  |   +----------------------+
                      | content_units              |
                      | term_postings              |
@@ -209,7 +209,7 @@ Default local runtime state lives under:
 
 - `~/.searchi/`
 
-Docker Compose mounts that same `~/.searchi/` directory into every service, so all runtime state is stored in the home directory rather than the project directory.
+Docker Compose mounts that same `~/.searchi/` directory into the app services, while the Ollama service uses the host's default `~/.ollama/` directory for model storage.
 
 ## Current Retrieval Semantics
 
@@ -263,7 +263,7 @@ Implemented:
 
 - LLM-based per-result summarization service
 - current default model:
-  - `qwen2.5:0.5b-instruct` (via Ollama, auto-downloaded on first startup)
+  - `qwen2.5:0.5b-instruct` for per-result summaries and `gpt-oss` for cited answers (via Ollama, auto-downloaded on first startup)
 - clicking the ✨ icon on any result card generates a single-sentence summary of that specific result
 - input: individual result `display_text`
 - output: single sentence summary
