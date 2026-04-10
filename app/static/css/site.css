@@ -776,10 +776,11 @@ a:hover {
 
 .ai-answer-body {
   margin: 0;
-  color: var(--text);
+  color: #b75ea6;
   line-height: 1.7;
   white-space: pre-wrap;
-  font-size: 1.06rem;
+  font-size: 0.98rem;
+  font-style: italic;
 }
 
 .ai-citations {
@@ -790,9 +791,9 @@ a:hover {
 
 .ai-citations-title {
   color: var(--muted);
-  font-size: 0.86rem;
+  font-size: 0.74rem;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.12em;
 }
 
 .ai-citation-list {
