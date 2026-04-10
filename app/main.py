@@ -238,10 +238,23 @@ def summarizer_health() -> dict[str, object]:
 
         data = json.loads(payload)
         raw_status = str(data.get("status", "ok"))
+        normalized_status = "ok" if raw_status in {"ok", "healthy"} else raw_status
+        summary_model = str(data.get("summary_model", settings.summarizer_model))
+        answer_model = str(data.get("answer_model", ""))
         return {
-            "status": "ok" if raw_status in {"ok", "healthy"} else raw_status,
+            "status": normalized_status,
             "model_name": str(data.get("model", settings.summarizer_model)),
             "url": settings.summarizer_url,
+            "summary_model": summary_model,
+            "answer_model": answer_model,
+            "summary": {
+                "status": normalized_status,
+                "model_name": summary_model,
+            },
+            "answer": {
+                "status": normalized_status,
+                "model_name": answer_model,
+            },
         }
     except (urllib.error.URLError, TimeoutError, ValueError) as exc:
         return {"status": "error", "error": str(exc)}
@@ -266,10 +279,79 @@ def vector_health() -> dict[str, object]:
         }
 
 
+def _overall_worker_status(workers: list[dict[str, str]]) -> tuple[str, str]:
+    if not workers:
+        return "unknown", "No workers"
+
+    ok_count = sum(1 for worker in workers if worker["status"] == "ok")
+    total_count = len(workers)
+    if ok_count == total_count:
+        return "ok", f"{ok_count}/{total_count} workers ok"
+    if ok_count == 0:
+        return "stopped", f"0/{total_count} workers ok"
+    return "partial", f"{ok_count}/{total_count} workers ok"
+
+
+def build_status_snapshot() -> dict[str, object]:
+    store = GlobalStore()
+    source_rows = store.list_source_roots()
+    total_documents = 0
+    total_content_units = 0
+    total_embeddings = 0
+    total_postings = 0
+    for row in source_rows:
+        stats = SourceStore(Path(str(row["db_path"]))).stats()
+        total_documents += int(stats["document_count"])
+        total_content_units += int(stats["content_unit_count"])
+        total_embeddings += int(stats["embedding_count"])
+        total_postings += int(stats["term_posting_count"])
+
+    job_counts = store.job_status_counts()
+    workers = get_docker_workers()
+    workers.sort(key=lambda worker: worker["name"])
+    worker_status, worker_summary = _overall_worker_status(workers)
+    current_vector_health = vector_health()
+    current_reranker_health = reranker_health()
+    current_summarizer_health = summarizer_health()
+
+    return {
+        "status": "ok",
+        "service": "web",
+        "web_status": "ok",
+        "source_count": len(source_rows),
+        "document_count": total_documents,
+        "content_unit_count": total_content_units,
+        "embedding_count": total_embeddings,
+        "term_posting_count": total_postings,
+        "job_counts": {
+            "pending": int(job_counts["pending"]),
+            "running": int(job_counts["running"]),
+            "done": int(job_counts["done"]),
+            "failed": int(job_counts["failed"]),
+        },
+        "indexing_active": int(job_counts["running"]) > 0 or int(job_counts["pending"]) > 0,
+        "worker_status": worker_status,
+        "worker_summary": worker_summary,
+        "workers": workers,
+        "reranker_health": current_reranker_health,
+        "summarizer_health": current_summarizer_health,
+        "vector_model_name": settings.vector_model_name,
+        "vector_enabled": settings.enable_vector_retrieval,
+        "vector_health": current_vector_health,
+        "reranker_enabled": settings.enable_reranker,
+        "poll_seconds": settings.poll_seconds,
+    }
+
+
 def ensure_runtime_dirs() -> None:
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     settings.app_db_path.parent.mkdir(parents=True, exist_ok=True)
     settings.source_db_dir.mkdir(parents=True, exist_ok=True)
+
+
+@app.get("/health")
+def health() -> dict[str, object]:
+    return build_status_snapshot()
 
 
 @app.on_event("startup")
@@ -598,64 +680,11 @@ async def sources_view(
 
 @app.get("/status", response_class=HTMLResponse)
 async def status_view(request: Request) -> HTMLResponse:
-    store = GlobalStore()
-    source_rows = store.list_source_roots()
-    current_vector_health = vector_health()
-    total_documents = 0
-    total_content_units = 0
-    total_embeddings = 0
-    total_postings = 0
-    for row in source_rows:
-        stats = SourceStore(Path(str(row["db_path"]))).stats()
-        total_documents += int(stats["document_count"])
-        total_content_units += int(stats["content_unit_count"])
-        total_embeddings += int(stats["embedding_count"])
-        total_postings += int(stats["term_posting_count"])
-    job_counts = store.job_status_counts()
-
-    # Get workers from Docker
-    workers = get_docker_workers()
-    workers.sort(key=lambda w: w["name"])
-
-    # Calculate overall worker status
-    if not workers:
-        overall_worker_status = "unknown"
-        worker_summary = "No workers"
-    else:
-        ok_count = sum(1 for w in workers if w["status"] == "ok")
-        total_count = len(workers)
-        if ok_count == total_count:
-            overall_worker_status = "ok"
-            worker_summary = f"{ok_count}/{total_count} workers ok"
-        elif ok_count == 0:
-            overall_worker_status = "stopped"
-            worker_summary = f"0/{total_count} workers ok"
-        else:
-            overall_worker_status = "partial"
-            worker_summary = f"{ok_count}/{total_count} workers ok"
-
+    status_snapshot = build_status_snapshot()
     return templates.TemplateResponse(
         request,
         "status.html",
-        {
-            "job_counts": job_counts,
-            "source_count": len(source_rows),
-            "document_count": total_documents,
-            "content_unit_count": total_content_units,
-            "embedding_count": total_embeddings,
-            "term_posting_count": total_postings,
-            "reranker_health": reranker_health(),
-            "summarizer_health": summarizer_health(),
-            "vector_model_name": settings.vector_model_name,
-            "vector_enabled": settings.enable_vector_retrieval,
-            "vector_health": current_vector_health,
-            "reranker_enabled": settings.enable_reranker,
-            "poll_seconds": settings.poll_seconds,
-            "web_status": "ok",
-            "worker_status": overall_worker_status,
-            "worker_summary": worker_summary,
-            "workers": workers,
-        },
+        status_snapshot,
     )
 
 
@@ -705,18 +734,6 @@ import asyncio
 import json
 
 
-async def status_event_stream():
-    """Server-Sent Events stream for status updates."""
-    while True:
-        try:
-            status_data = await get_status_data()
-            yield f"data: {json.dumps(status_data)}\n\n"
-            await asyncio.sleep(3)  # Send updates every 3 seconds
-        except Exception as e:
-            print(f"Status stream error: {e}")
-            break
-
-
 def get_docker_workers() -> list[dict[str, str]]:
     """Get worker status from Docker."""
     try:
@@ -746,64 +763,6 @@ def get_docker_workers() -> list[dict[str, str]]:
     except Exception as e:
         print(f"Failed to get Docker workers: {e}")
         return []
-
-
-async def get_status_data() -> dict[str, object]:
-    store = GlobalStore()
-    job_counts = store.job_status_counts()
-
-    # Get workers from Docker
-    workers = get_docker_workers()
-    workers.sort(key=lambda w: w["name"])
-
-    # Calculate overall worker status
-    if not workers:
-        overall_worker_status = "unknown"
-        worker_summary = "No workers"
-    else:
-        ok_count = sum(1 for w in workers if w["status"] == "ok")
-        total_count = len(workers)
-        if ok_count == total_count:
-            overall_worker_status = "ok"
-            worker_summary = f"{ok_count}/{total_count} workers ok"
-        elif ok_count == 0:
-            overall_worker_status = "stopped"
-            worker_summary = f"0/{total_count} workers ok"
-        else:
-            overall_worker_status = "partial"
-            worker_summary = f"{ok_count}/{total_count} workers ok"
-
-    return {
-        "worker_status": overall_worker_status,
-        "worker_summary": worker_summary,
-        "workers": workers,
-        "job_counts": {
-            "pending": int(job_counts["pending"]),
-            "running": int(job_counts["running"]),
-            "done": int(job_counts["done"]),
-            "failed": int(job_counts["failed"]),
-        },
-        "indexing_active": int(job_counts["running"]) > 0,
-    }
-
-
-@app.get("/api/status/stream")
-async def api_status_stream():
-    """Server-Sent Events endpoint for live status updates."""
-    return StreamingResponse(
-        status_event_stream(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-        }
-    )
-
-
-@app.get("/api/status")
-async def api_status() -> dict[str, object]:
-    """One-time status snapshot."""
-    return await get_status_data()
 
 
 def _get_document_sections(source_root_id: int, document_id: int) -> list[SearchResult]:

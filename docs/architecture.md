@@ -209,7 +209,7 @@ Default local runtime state lives under:
 
 - `~/.searchi/`
 
-Docker Compose mounts that same `~/.searchi/` directory into the app services, while the Ollama service uses the host's default `~/.ollama/` directory for model storage.
+Docker Compose mounts that same `~/.searchi/` directory into the app services. Ollama runs natively on the host and uses the host's default `~/.ollama/` directory for model storage.
 
 ## Current Retrieval Semantics
 

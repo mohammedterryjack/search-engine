@@ -26,9 +26,9 @@ make rebuild
 
 With the default local configuration, app runtime data lives under `~/.searchi/`.
 
-The Docker Compose setup also points at the host `~/.searchi/` directory via a bind mount for app state, while Ollama models live under the host default `~/.ollama` directory.
+The Docker Compose setup points at the host `~/.searchi/` directory via a bind mount for app state. Ollama runs natively on the host and keeps models in the host default `~/.ollama` directory.
 
-**Note:** On first startup, the Ollama service will automatically download the configured Ollama models into the host's default Ollama directory at `~/.ollama`. By default this includes `qwen2.5:0.5b-instruct` for per-result summaries and `gpt-oss` for cited answers.
+**Note:** This stack expects a native host Ollama instance listening on `http://localhost:11434`. The Dockerised `summariser` service connects to it via `http://host.docker.internal:11434`. Ensure your host Ollama has the configured models available, including `qwen2.5:0.5b-instruct` for per-result summaries and `gpt-oss` for cited answers.
 
 ## HTTP API
 

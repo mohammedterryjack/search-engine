@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Status - searChi{% endblock %}
 {% block body %}
-<main class="admin-shell">
+<main class="admin-shell" data-status-endpoint="/health" data-poll-seconds="{{ poll_seconds }}">
   <header class="admin-header">
     <a href="/" class="brand brand-small"><span class="brand-letter">s</span><span class="brand-letter">e</span><span class="brand-letter">a</span><span class="brand-letter">r</span><span class="brand-letter">C</span><span class="brand-letter">h</span><span class="brand-letter">i</span></a>
     <h1>Status</h1>
@@ -104,23 +104,45 @@
         <div class="small-status">{{ reranker_health.error }}</div>
         {% endif %}
       </div>
-      <div class="stat-tile {{ 'status-ok' if summarizer_health.status == 'ok' else 'status-bad' if summarizer_health.status in ('error', 'model-missing') else 'status-neutral' }}">
-        <div class="stat-label">Summarizer</div>
+      <div class="stat-tile {{ 'status-ok' if summarizer_health.summary.status == 'ok' else 'status-bad' if summarizer_health.summary.status in ('error', 'model-missing') else 'status-neutral' }}">
+        <div class="stat-label">Summariser</div>
         <div class="stat-value">
-          {% if summarizer_health.status == 'disabled' %}
+          {% if summarizer_health.summary.status == 'disabled' %}
           Disabled
-          {% elif summarizer_health.status == 'ok' %}
+          {% elif summarizer_health.summary.status == 'ok' %}
           Enabled
-          {% elif summarizer_health.status == 'model-missing' %}
+          {% elif summarizer_health.summary.status == 'model-missing' %}
           Missing Model
           {% else %}
           Error
           {% endif %}
         </div>
-        {% if summarizer_health.model_name %}
-        <div class="small-status">{{ summarizer_health.model_name }}</div>
+        {% if summarizer_health.summary.model_name %}
+        <div class="small-status">{{ summarizer_health.summary.model_name }}</div>
         {% endif %}
-        {% if summarizer_health.status == 'model-missing' %}
+        {% if summarizer_health.summary.status == 'model-missing' %}
+        <div class="small-status">Model not found in Ollama</div>
+        {% elif summarizer_health.error %}
+        <div class="small-status">{{ summarizer_health.error }}</div>
+        {% endif %}
+      </div>
+      <div class="stat-tile {{ 'status-ok' if summarizer_health.answer.status == 'ok' else 'status-bad' if summarizer_health.answer.status in ('error', 'model-missing') else 'status-neutral' }}">
+        <div class="stat-label">AI Answer</div>
+        <div class="stat-value">
+          {% if summarizer_health.answer.status == 'disabled' %}
+          Disabled
+          {% elif summarizer_health.answer.status == 'ok' %}
+          Enabled
+          {% elif summarizer_health.answer.status == 'model-missing' %}
+          Missing Model
+          {% else %}
+          Error
+          {% endif %}
+        </div>
+        {% if summarizer_health.answer.model_name %}
+        <div class="small-status">{{ summarizer_health.answer.model_name }}</div>
+        {% endif %}
+        {% if summarizer_health.answer.status == 'model-missing' %}
         <div class="small-status">Model not found in Ollama</div>
         {% elif summarizer_health.error %}
         <div class="small-status">{{ summarizer_health.error }}</div>

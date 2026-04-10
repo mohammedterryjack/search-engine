@@ -23,15 +23,15 @@ Service: `parser`
 
 ## Summaries And AI Answers
 
-Services: `summariser` + `ollama`
+Service: `summariser`
 
-- Runtime: Ollama
+- Runtime: native host Ollama, reached from Docker via `host.docker.internal`
 - Summary model: `qwen2.5:0.5b-instruct`
 - AI answer model: `gpt-oss`
 - Summary behavior: short, 2-3 sentence summaries for individual results
 - AI answer behavior: fuller cited answers grounded in retrieved search sources
 
-Model artifacts are stored outside the container in:
+Model artifacts are stored on the host in:
 
 ```text
 ~/.ollama
@@ -62,12 +62,12 @@ Services: `web` and `parser`
 
 ## Updating Models
 
-Change the model settings in [`/.env`](/Users/mohammed/Code/search_engine/.env), then recreate the affected services.
+Change the model settings in [`/.env`](/Users/mohammed/Code/search_engine/.env), ensure the models exist in your host Ollama instance, then recreate the affected services.
 
 Typical restart command:
 
 ```bash
-docker compose up -d --force-recreate ollama summariser web parser
+docker compose up -d --force-recreate summariser web parser
 ```
 
 If you change reranker settings, recreate `reranker` too.

@@ -1,4 +1,8 @@
 (() => {
+  const statusRoot = document.querySelector('[data-status-endpoint]');
+  const statusEndpoint = statusRoot?.dataset.statusEndpoint || '/health';
+  const pollSeconds = Number(statusRoot?.dataset.pollSeconds || '3');
+
   const updateWorkerStatus = (data) => {
     // Update overall worker status
     const workerTile = document.querySelector('[data-worker-status]');
@@ -65,26 +69,17 @@
     updateJobCounts(data);
   };
 
-  const connectEventSource = () => {
-    const eventSource = new EventSource('/api/status/stream');
-
-    eventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        handleStatusUpdate(data);
-      } catch (error) {
-        console.error('Failed to parse status update:', error);
+  const refreshStatus = async () => {
+    try {
+      const response = await fetch(statusEndpoint, { headers: { Accept: 'application/json' } });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
       }
-    };
-
-    eventSource.onerror = (error) => {
-      console.error('SSE connection error:', error);
-      eventSource.close();
-      // Reconnect after 5 seconds
-      setTimeout(connectEventSource, 5000);
-    };
-
-    return eventSource;
+      const data = await response.json();
+      handleStatusUpdate(data);
+    } catch (error) {
+      console.error('Status refresh error:', error);
+    }
   };
 
   const getWorkerStatusClass = (status) => {
@@ -184,8 +179,8 @@
     closeLogsBtn.addEventListener('click', closeWorkerLogs);
   }
 
-  // Connect to SSE stream
-  connectEventSource();
+  refreshStatus();
+  window.setInterval(refreshStatus, Math.max(pollSeconds, 1) * 1000);
 
   // Attach click handlers to initial worker cards
   attachWorkerClickHandlers();

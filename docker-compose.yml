@@ -85,25 +85,6 @@ services:
       SEARCHY_RERANKER_BATCH_SIZE: ${SEARCHY_RERANKER_BATCH_SIZE}
       HF_HOME: ${HF_HOME}
 
-  ollama:
-    image: ollama/ollama:latest
-    entrypoint: ["/bin/sh", "/app/scripts/init-ollama.sh"]
-    labels:
-      - "searchi.service=ollama"
-      - "searchi.model=summary=${SEARCHY_SUMMARY_MODEL},answer=${SEARCHY_AI_MODEL}"
-    volumes:
-      - .:/app
-      - ${HOME}/.ollama:/root/.ollama
-    environment:
-      OLLAMA_HOST: ${OLLAMA_HOST}
-      <<: *searchi-model-env
-    healthcheck:
-      test: ["CMD-SHELL", "ollama show \"$$SEARCHY_SUMMARY_MODEL\" >/dev/null 2>&1 && ollama show \"$$SEARCHY_AI_MODEL\" >/dev/null 2>&1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
-
   summariser:
     build: .
     command: uvicorn app.summarizer_api:app --host 0.0.0.0 --port 8020
@@ -119,9 +100,6 @@ services:
       <<: *searchi-model-env
       SEARCHY_SUMMARIZER_TIMEOUT: ${SEARCHY_SUMMARIZER_TIMEOUT}
       SEARCHY_AI_SOURCE_LIMIT: ${SEARCHY_AI_SOURCE_LIMIT}
-    depends_on:
-      ollama:
-        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8020/health"]
       interval: 30s
