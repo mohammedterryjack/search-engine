@@ -112,13 +112,13 @@
         <p
           class="result-snippet"
           title="Click to expand"
-          data-full-text="{{ result.display_text|e }}"
+          data-full-text="{{ result.text_content|e }}"
         >{{ result.highlighted_text|safe }}</p>
         <div class="result-summary-container" data-result-summary>
           <button
             class="result-summarize-btn"
             data-summarize-result
-            data-result-text="{{ (result.text_content or result.display_text)|e }}"
+            data-result-text="{{ result.text_content|e }}"
             title="summarise"
             aria-label="summarise"
           >✨</button>

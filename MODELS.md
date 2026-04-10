@@ -8,7 +8,7 @@ Shared model settings are defined in [`/.env`](/Users/mohammed/Code/search_engin
 
 - Summary model: `qwen2.5:0.5b-instruct`
 - AI answer model: `gpt-oss`
-- Ollama context size: `4096`
+- Ollama context size: `32768`
 
 The summariser and AI answer path are currently text-only. Search results may still contain figure images for UI display, but image payloads are not forwarded to the Ollama model.
 

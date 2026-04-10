@@ -40,12 +40,12 @@ def test_bm25_score_prefers_higher_term_frequency() -> None:
 
 def test_fuse_results_rewards_overlap() -> None:
     lexical = [
-        SearchResult(1, "/src", 1, 10, "/doc1", "doc1", "section", 1, "A", "alpha", 1.0),
-        SearchResult(1, "/src", 1, 20, "/doc2", "doc2", "section", 1, "B", "beta", 0.9),
+        SearchResult(1, "/src", 1, 10, "/doc1", "doc1", "section", 1, "A", 1.0, "alpha"),
+        SearchResult(1, "/src", 1, 20, "/doc2", "doc2", "section", 1, "B", 0.9, "beta"),
     ]
     semantic = [
-        SearchResult(1, "/src", 1, 10, "/doc1", "doc1", "section", 1, "A", "alpha", 0.8),
-        SearchResult(1, "/src", 1, 30, "/doc3", "doc3", "section", 1, "C", "gamma", 0.7),
+        SearchResult(1, "/src", 1, 10, "/doc1", "doc1", "section", 1, "A", 0.8, "alpha"),
+        SearchResult(1, "/src", 1, 30, "/doc3", "doc3", "section", 1, "C", 0.7, "gamma"),
     ]
 
     fused = fuse_results(lexical, semantic, limit=10)
@@ -73,7 +73,6 @@ def test_semantic_search_respects_threshold(monkeypatch, tmp_path: Path) -> None
                 "anchor_key": "section-1",
                 "text_content": "chaos attractor",
                 "caption": "",
-                "display_text": "chaos attractor",
                 "token_count": 2,
                 "created_at": utc_now(),
                 "terms": term_frequencies("chaos attractor"),
@@ -128,24 +127,27 @@ def test_rerank_results_uses_reranker_response(monkeypatch) -> None:
     monkeypatch.setattr("urllib.request.urlopen", lambda *args, **kwargs: FakeResponse())
 
     results = [
-        SearchResult(1, "/src", 1, 1, "/doc1", "doc1", "section", 1, "A", "alpha", 0.3),
-        SearchResult(1, "/src", 1, 2, "/doc2", "doc2", "section", 1, "B", "beta", 0.2),
+        SearchResult(1, "/src", 1, 1, "/doc1", "doc1", "section", 1, "A", 0.3, "alpha"),
+        SearchResult(1, "/src", 1, 2, "/doc2", "doc2", "section", 1, "B", 0.2, "beta"),
     ]
     reranked, warning = rerank_results("query", results)
     assert warning is None
     assert [item.content_unit_id for item in reranked] == [2, 1]
 
 
-def test_rerank_results_timeout_falls_back_with_warning(monkeypatch) -> None:
+def test_rerank_results_timeout_raises(monkeypatch) -> None:
     monkeypatch.setattr("urllib.request.urlopen", lambda *args, **kwargs: (_ for _ in ()).throw(TimeoutError()))
 
     results = [
-        SearchResult(1, "/src", 1, 1, "/doc1", "doc1", "section", 1, "A", "alpha", 0.3),
-        SearchResult(1, "/src", 1, 2, "/doc2", "doc2", "section", 1, "B", "beta", 0.2),
+        SearchResult(1, "/src", 1, 1, "/doc1", "doc1", "section", 1, "A", 0.3, "alpha"),
+        SearchResult(1, "/src", 1, 2, "/doc2", "doc2", "section", 1, "B", 0.2, "beta"),
     ]
-    reranked, warning = rerank_results("query", results)
-    assert [item.content_unit_id for item in reranked] == [1, 2]
-    assert warning == "Reranker request timed out. Showing lexical/vector ranking without reranking."
+    try:
+        rerank_results("query", results)
+    except RuntimeError as exc:
+        assert str(exc) == "Reranker request timed out."
+    else:
+        raise AssertionError("Expected rerank_results() to fail explicitly on timeout.")
 
 
 def test_semantic_search_repairs_stale_vector_ids(monkeypatch, tmp_path: Path) -> None:
@@ -169,7 +171,6 @@ def test_semantic_search_repairs_stale_vector_ids(monkeypatch, tmp_path: Path) -
                 "anchor_key": "section-1",
                 "text_content": "chaos attractor",
                 "caption": "",
-                "display_text": "chaos attractor",
                 "token_count": 2,
                 "created_at": utc_now(),
                 "terms": term_frequencies("chaos attractor"),
@@ -222,7 +223,6 @@ def test_lexical_search_respects_unit_type_filter(tmp_path: Path) -> None:
                 "anchor_key": "section-1",
                 "text_content": "chaos attractor",
                 "caption": "",
-                "display_text": "chaos attractor",
                 "token_count": 2,
                 "created_at": utc_now(),
                 "terms": term_frequencies("chaos attractor"),
@@ -235,7 +235,6 @@ def test_lexical_search_respects_unit_type_filter(tmp_path: Path) -> None:
                 "anchor_key": "figure-1",
                 "text_content": "chaos attractor",
                 "caption": "Chaos figure",
-                "display_text": "Chaos figure",
                 "token_count": 2,
                 "created_at": utc_now(),
                 "terms": term_frequencies("chaos attractor"),
@@ -278,7 +277,6 @@ def test_semantic_search_respects_unit_type_filter(monkeypatch, tmp_path: Path) 
                 "anchor_key": "section-1",
                 "text_content": "chaos attractor",
                 "caption": "",
-                "display_text": "chaos attractor",
                 "token_count": 2,
                 "created_at": utc_now(),
                 "terms": term_frequencies("chaos attractor"),
@@ -291,7 +289,6 @@ def test_semantic_search_respects_unit_type_filter(monkeypatch, tmp_path: Path) 
                 "anchor_key": "figure-1",
                 "text_content": "chaos attractor",
                 "caption": "Chaos figure",
-                "display_text": "Chaos figure",
                 "token_count": 2,
                 "created_at": utc_now(),
                 "terms": term_frequencies("chaos attractor"),
@@ -319,7 +316,7 @@ def test_semantic_search_respects_unit_type_filter(monkeypatch, tmp_path: Path) 
     assert results[0].unit_type == "figure"
 
 
-def test_semantic_search_falls_back_when_vector_store_fails(monkeypatch, tmp_path: Path) -> None:
+def test_semantic_search_fails_when_vector_store_fails(monkeypatch, tmp_path: Path) -> None:
     doc_path = tmp_path / "paper.pdf"
     doc_path.write_text("placeholder")
     store = SourceStore(tmp_path / "source.sqlite3")
@@ -340,7 +337,6 @@ def test_semantic_search_falls_back_when_vector_store_fails(monkeypatch, tmp_pat
                 "anchor_key": "section-1",
                 "text_content": "chaos attractor",
                 "caption": "",
-                "display_text": "chaos attractor",
                 "token_count": 2,
                 "created_at": utc_now(),
                 "terms": term_frequencies("chaos attractor"),
@@ -354,16 +350,18 @@ def test_semantic_search_falls_back_when_vector_store_fails(monkeypatch, tmp_pat
         lambda _db_path, _query, limit=300: (_ for _ in ()).throw(VectorStoreError("bad cache")),
     )
 
-    results, warning = semantic_search_source_db(
-        source_root_id=1,
-        source_path="/src",
-        db_path=store.db_path,
-        query="chaos system",
-        vector_min_score=0.0,
-    )
-
-    assert results == []
-    assert warning == "Semantic search is temporarily unavailable. Showing lexical results only."
+    try:
+        semantic_search_source_db(
+            source_root_id=1,
+            source_path="/src",
+            db_path=store.db_path,
+            query="chaos system",
+            vector_min_score=0.0,
+        )
+    except RuntimeError as exc:
+        assert str(exc) == "Semantic search is unavailable."
+    else:
+        raise AssertionError("Expected semantic_search_source_db() to fail explicitly.")
 
 
 def test_search_all_sources_filters_unit_types(monkeypatch, tmp_path: Path) -> None:
@@ -387,7 +385,6 @@ def test_search_all_sources_filters_unit_types(monkeypatch, tmp_path: Path) -> N
                 "anchor_key": "section-1",
                 "text_content": "chaos attractor",
                 "caption": "",
-                "display_text": "chaos attractor",
                 "token_count": 2,
                 "created_at": utc_now(),
                 "terms": term_frequencies("chaos attractor"),
@@ -400,7 +397,6 @@ def test_search_all_sources_filters_unit_types(monkeypatch, tmp_path: Path) -> N
                 "anchor_key": "figure-1",
                 "text_content": "chaos attractor",
                 "caption": "Chaos figure",
-                "display_text": "Chaos figure",
                 "token_count": 2,
                 "created_at": utc_now(),
                 "terms": term_frequencies("chaos attractor"),

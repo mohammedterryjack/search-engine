@@ -13,78 +13,18 @@ export const truncateText = (text = '', limit = 320) => {
   return `${text.slice(0, limit - 1).replace(/\s+$/, '')}\u2026`;
 };
 
-const normalizeToken = (token = '') => token.toLowerCase();
-
-const normalizedTerms = (query = '') => {
-  const matches = String(query).match(/[A-Za-z0-9]+/g) || [];
-  return new Set(matches.map(normalizeToken));
-};
-
-export const highlightText = (text = '', query = '') => {
-  const matchedTerms = normalizedTerms(query);
-  if (!matchedTerms.size) {
-    return escapeHtml(text);
-  }
-
-  let result = '';
-  let lastIndex = 0;
-  const wordRe = /[A-Za-z0-9]+/g;
-  let match;
-
-  while ((match = wordRe.exec(text)) !== null) {
-    const start = match.index;
-    const end = start + match[0].length;
-    result += escapeHtml(text.slice(lastIndex, start));
-    const surface = match[0];
-    const escapedSurface = escapeHtml(surface);
-    if (matchedTerms.has(normalizeToken(surface))) {
-      result += `<mark>${escapedSurface}</mark>`;
-    } else {
-      result += escapedSurface;
-    }
-    lastIndex = end;
-  }
-
-  result += escapeHtml(text.slice(lastIndex));
-  return result;
-};
-
-export const deriveDisplayText = (result) => {
-  const text = (result.text_content || '').trim();
-  const section = (result.section_name || '').trim();
-  if (text) {
-    return text;
-  }
-  if (result.unit_type === 'figure' && section) {
-    return `Figure in ${section}`;
-  }
-  if (result.unit_type === 'table' && section) {
-    return `Table in ${section}`;
-  }
-  if (result.unit_type === 'figure') {
-    return 'Figure';
-  }
-  if (result.unit_type === 'table') {
-    return 'Table';
-  }
-  return '';
-};
-
 export const renderResultCard = (result, options = {}) => {
   const {
-    query = '',
-    highlightQuery = false,
     summaryText = result.text_content || '',
+    snippetHtml = '',
   } = options;
   const sectionLabel = result.section_name || 'Untitled';
   const titleText = result.unit_type === 'section'
     ? sectionLabel
     : `${capitalize(result.unit_type)} · ${sectionLabel}`;
-  const displayText = deriveDisplayText(result);
-  const snippetText = truncateText(displayText);
-  const snippetHtml = highlightQuery
-    ? highlightText(snippetText, query)
-    : escapeHtml(snippetText);
+  const displayText = (result.text_content || '').trim();
+  const truncatedSnippetHtml = escapeHtml(truncateText(displayText));
+  const renderedSnippetHtml = snippetHtml || result.highlighted_text || truncatedSnippetHtml;
   const subtitleParts = [`<span>${escapeHtml(result.unit_type)}</span>`];
   if (typeof result.page_number === 'number' && !Number.isNaN(result.page_number)) {
     subtitleParts.push(`<span>Page ${result.page_number}</span>`);
@@ -114,7 +54,7 @@ export const renderResultCard = (result, options = {}) => {
         class="result-snippet"
         title="Click to expand"
         data-full-text="${escapeHtml(displayText)}"
-      >${snippetHtml}</p>
+      >${renderedSnippetHtml}</p>
       <div class="result-summary-container" data-result-summary>
         <button
           class="result-summarize-btn"

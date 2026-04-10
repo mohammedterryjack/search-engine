@@ -111,7 +111,6 @@ def test_serialize_search_results_returns_public_api_shape() -> None:
             unit_type="section",
             page_number=3,
             section_name="Introduction",
-            display_text="Short display text",
             score=0.87,
             text_content="Full section text",
             image_mime=None,
@@ -132,6 +131,7 @@ def test_serialize_search_results_returns_public_api_shape() -> None:
             "text_content": "Full section text",
             "image_mime": None,
             "image_data": None,
+            "highlighted_text": "<mark>Short</mark> display text",
         }
     ]
 
@@ -148,7 +148,6 @@ def test_serialize_search_results_defaults_missing_text_content_to_empty_string(
             unit_type="figure",
             page_number=None,
             section_name="Figure 1",
-            display_text="Rendered caption",
             score=0.42,
             text_content=None,
             image_mime="image/png",
@@ -166,4 +165,4 @@ def test_serialize_search_results_defaults_missing_text_content_to_empty_string(
     assert "document_path" not in payload[0]
     assert "display_text" not in payload[0]
     assert "filename" not in payload[0]
-    assert "highlighted_text" not in payload[0]
+    assert payload[0]["highlighted_text"] == ""

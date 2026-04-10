@@ -84,5 +84,5 @@ def test_extract_structured_units_handles_sections_figures_and_tables() -> None:
     assert "section" in unit_types
     assert "figure" in unit_types
     assert "table" in unit_types
-    assert any(unit.page_number == 2 and "Figure caption" in unit.display_text for unit in units)
-    assert any(unit.page_number == 3 and "Table caption" in unit.display_text for unit in units)
+    assert any(unit.page_number == 2 and unit.caption == "Figure caption" for unit in units)
+    assert any(unit.page_number == 3 and unit.caption == "Table caption" for unit in units)

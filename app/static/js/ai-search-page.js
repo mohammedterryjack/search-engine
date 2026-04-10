@@ -16,6 +16,7 @@
   const citationsSection = document.querySelector('[data-ai-citations]');
   const citationList = document.querySelector('[data-ai-citation-list]');
   const endpoint = '/api/ai-search';
+  let excludedContentUnitIds = new Set();
 
   const escapeHtml = (value = '') => {
     const div = document.createElement('div');
@@ -51,7 +52,22 @@
     }
     citationsSection.hidden = false;
     citationList.innerHTML = sources.map((source) => (
-      `<li><strong>[${source.id}]</strong> ${escapeHtml(source.label || '')}</li>`
+      `<li class="ai-citation-item" data-content-unit-id="${Number(source.content_unit_id) || 0}">
+        <div class="ai-citation-row">
+          <div class="ai-citation-copy">
+            <strong>[${source.id}]</strong> ${escapeHtml(source.label || '')}
+          </div>
+          <button
+            type="button"
+            class="ai-citation-remove"
+            data-remove-source
+            data-content-unit-id="${Number(source.content_unit_id) || 0}"
+            aria-label="Exclude source ${source.id}"
+            title="Exclude this source and regenerate"
+          >×</button>
+        </div>
+        <div class="ai-citation-preview">${escapeHtml(source.preview || '')}</div>
+      </li>`
     )).join('');
   };
 
@@ -77,6 +93,7 @@
       source: selectedSources,
       unit_type: selectedUnits,
       vector_min_score: slider ? Number(slider.value) : undefined,
+      exclude_content_unit_ids: Array.from(excludedContentUnitIds),
     };
   };
 
@@ -137,9 +154,13 @@
     }
   };
 
-  const performSearch = async (event) => {
+  const performSearch = async (options = {}) => {
+    const { event = null, preserveExclusions = false } = options;
     if (event) {
       event.preventDefault();
+    }
+    if (!preserveExclusions) {
+      excludedContentUnitIds = new Set();
     }
     const activeForm = event?.currentTarget || primaryForm;
     const payload = gatherPayload(activeForm);
@@ -206,8 +227,24 @@
   };
 
   forms.forEach((form) => {
-    form.addEventListener('submit', performSearch);
+    form.addEventListener('submit', (event) => {
+      performSearch({ event, preserveExclusions: false });
+    });
   });
+
+  if (citationList) {
+    citationList.addEventListener('click', (event) => {
+      const removeButton = event.target.closest('[data-remove-source]');
+      if (!removeButton) {
+        return;
+      }
+      const contentUnitId = Number(removeButton.dataset.contentUnitId);
+      if (!Number.isNaN(contentUnitId) && contentUnitId > 0) {
+        excludedContentUnitIds.add(contentUnitId);
+        performSearch({ preserveExclusions: true });
+      }
+    });
+  }
 
   const queryInput = followupForm?.querySelector('[name="q"]') || primaryForm?.querySelector('[name="q"]');
   if (queryInput && queryInput.value.trim()) {

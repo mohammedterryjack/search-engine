@@ -35,7 +35,7 @@ def dump_units(units: Sequence[object], *, max_units: int, show_all: bool) -> No
         print(f"Anchor: {unit.anchor_key}")
         print(f"Caption: {unit.caption or '<none>'}")
         print(f"Tokens: {unit.token_count if hasattr(unit, 'token_count') else 'n/a'}")
-        snippet = str(unit.display_text).replace("\n", " ").strip()
+        snippet = str(unit.text_content).replace("\n", " ").strip()
         print(f"Text: {snippet[:400]}")
     if not show_all and len(units) > max_units:
         print(f"\n... {len(units) - max_units} more units omitted ...")

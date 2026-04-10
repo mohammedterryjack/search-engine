@@ -14,7 +14,6 @@ class SearchResult:
     unit_type: str
     page_number: int | None
     section_name: str
-    display_text: str
     score: float
     text_content: str | None = None
     image_mime: str | None = None

@@ -26,7 +26,6 @@ from app.db.global_store import GlobalStore
 from app.db.source_store import SourceStore
 from app.services.ingest import list_supported_documents
 from app.models import SearchResponse, SearchResult
-from app.services.content_units import display_text_for_unit
 from app.services.search import SearchPipelineError, search_all_sources
 from app.services.summarize import answer_search_results_stream
 from app.services.vector_store import (
@@ -43,10 +42,7 @@ from app.ui import highlight_terms, truncate_text
 def nl2br(value: str | None) -> str:
     if not value:
         return ""
-    try:
-        from markupsafe import Markup
-    except ImportError:
-        from jinja2 import Markup  # fallback for older jinja
+    from markupsafe import Markup
     import html
     escaped = html.escape(value)
     return Markup(escaped.replace("\n", "<br>\n"))
@@ -78,6 +74,7 @@ class SearchApiRequest(BaseModel):
     source: list[int] = Field(default_factory=list)
     unit_type: list[str] = Field(default_factory=list)
     vector_min_score: float | None = None
+    exclude_content_unit_ids: list[int] = Field(default_factory=list)
 
 
 
@@ -90,6 +87,8 @@ class SearchApiResponse(BaseModel):
 class AiSearchSourceRef(BaseModel):
     id: int
     label: str
+    content_unit_id: int
+    preview: str
 
 
 def _sse_event(payload: dict[str, object]) -> str:
@@ -144,6 +143,7 @@ def _serialize_search_results(results: list[SearchResult]) -> list[dict[str, obj
                 "text_content": result.text_content or "",
                 "image_mime": result.image_mime,
                 "image_data": result.image_data,
+                "highlighted_text": result.highlighted_text or "",
             }
         )
     return serialized_results
@@ -153,7 +153,7 @@ def _apply_highlights(results: list[SearchResult], query: str) -> None:
     if not results:
         return
     for result in results:
-        snippet = truncate_text(result.display_text or "", SNIPPET_CHAR_LIMIT)
+        snippet = truncate_text(result.text_content or "", SNIPPET_CHAR_LIMIT)
         result.highlighted_text = highlight_terms(snippet, query)
 
 
@@ -186,7 +186,14 @@ def _build_ai_source_payload(results: list[SearchResult]) -> tuple[list[dict[str
                 "text": text,
             }
         )
-        refs.append(AiSearchSourceRef(id=next_id, label=label))
+        refs.append(
+            AiSearchSourceRef(
+                id=next_id,
+                label=label,
+                content_unit_id=result.content_unit_id,
+                preview=truncate_text(text, 280),
+            )
+        )
         next_id += 1
     return payload_sources, refs
 
@@ -553,7 +560,14 @@ async def api_ai_search(payload: SearchApiRequest) -> StreamingResponse:
         if search_response.warning:
             yield _sse_event({"type": "warning", "warning": search_response.warning})
 
-        source_payload, source_refs = _build_ai_source_payload(search_response.results)
+        excluded_content_unit_ids = set(payload.exclude_content_unit_ids)
+        filtered_results = [
+            result
+            for result in search_response.results
+            if result.content_unit_id not in excluded_content_unit_ids
+        ]
+
+        source_payload, source_refs = _build_ai_source_payload(filtered_results)
         ts_sources = perf_counter()
         if source_refs:
             yield _sse_event(
@@ -789,12 +803,6 @@ def _get_document_sections(source_root_id: int, document_id: int) -> list[Search
             unit_type=str(row["unit_type"]),
             page_number=int(row["page_number"]) if row["page_number"] is not None else None,
             section_name=str(row["section_name"]) if row["section_name"] is not None else "",
-            display_text=display_text_for_unit(
-                unit_type=str(row["unit_type"]),
-                text_content=str(row["text_content"]) if row["text_content"] is not None else "",
-                caption=str(row["caption"]) if row["caption"] is not None else "",
-                section_name=str(row["section_name"]) if row["section_name"] is not None else "",
-            ),
             image_mime=row["image_mime"],
             image_data=row["image_data"],
             score=0.0,

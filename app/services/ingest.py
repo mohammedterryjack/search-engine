@@ -8,7 +8,7 @@ from typing import Any
 
 from app.db.global_store import utc_now
 from app.config import get_settings
-from app.services.content_units import display_text_for_unit
+from app.services.content_units import compose_text_content
 from app.services.tokenize import term_frequencies
 
 
@@ -71,9 +71,8 @@ def extract_image_data(text: str) -> tuple[str | None, str | None]:
         downscaled_data = base64.b64encode(buffer.getvalue()).decode('utf-8')
 
         return mime, downscaled_data
-    except Exception:
-        # If downscaling fails, return original
-        return mime, data
+    except Exception as exc:
+        raise RuntimeError("Failed to decode or downscale embedded image data.") from exc
 
 
 def strip_image_markup(text: str) -> str:
@@ -118,44 +117,31 @@ def build_docling_converter():
         }
     )
 
-    pipeline_options = None
     try:
         from docling.pipeline.standard_pdf_pipeline import ThreadedPdfPipelineOptions
+    except Exception as exc:
+        raise RuntimeError(
+            "Docling ThreadedPdfPipelineOptions is required but unavailable."
+        ) from exc
 
-        # Memory optimization settings:
-        # - images_scale=1.0: Reduce from default 2.0 (Issue #3216)
-        # - generate_parsed_pages=False: Don't keep parsed pages in memory (Issue #2540)
-        # - generate_page_images=False: Skip page image generation to save memory
-        # - generate_picture_images=True: Extract pictures for figure display
-        # - ocr_options: Configure RapidOCR threading
-        pipeline_options = ThreadedPdfPipelineOptions(
-            generate_picture_images=True,
-            images_scale=1.0,
-            generate_parsed_pages=False,
-            generate_page_images=False,
-            ocr_options=rapidocr_options,
-        )
-    except Exception:
-        try:
-            from docling.datamodel.pipeline_options import PdfPipelineOptions
-
-            pipeline_options = PdfPipelineOptions(
-                generate_picture_images=True,
-                images_scale=1.0,
-                generate_parsed_pages=False,
-                generate_page_images=False,
-                ocr_options=rapidocr_options,
-            )
-        except Exception:
-            pipeline_options = None
+    # Memory optimization settings:
+    # - images_scale=1.0: Reduce from default 2.0 (Issue #3216)
+    # - generate_parsed_pages=False: Don't keep parsed pages in memory (Issue #2540)
+    # - generate_page_images=False: Skip page image generation to save memory
+    # - generate_picture_images=True: Extract pictures for figure display
+    # - ocr_options: Configure RapidOCR threading
+    pipeline_options = ThreadedPdfPipelineOptions(
+        generate_picture_images=True,
+        images_scale=1.0,
+        generate_parsed_pages=False,
+        generate_page_images=False,
+        ocr_options=rapidocr_options,
+    )
 
     format_options: dict[InputFormat, PdfFormatOption] = {}
-    if pipeline_options is not None:
-        format_options[InputFormat.PDF] = PdfFormatOption(pipeline_options=pipeline_options)
+    format_options[InputFormat.PDF] = PdfFormatOption(pipeline_options=pipeline_options)
 
-    _GLOBAL_CONVERTER = (
-        DocumentConverter(format_options=format_options) if format_options else DocumentConverter()
-    )
+    _GLOBAL_CONVERTER = DocumentConverter(format_options=format_options)
     return _GLOBAL_CONVERTER
 
 
@@ -169,16 +155,6 @@ class ParsedUnit:
     caption: str
     image_mime: str | None = None
     image_data: str | None = None
-
-    @property
-    def display_text(self) -> str:
-        return display_text_for_unit(
-            unit_type=self.unit_type,
-            text_content=self.text_content,
-            caption=self.caption,
-            section_name=self.section_name,
-        )
-
 
 def list_supported_documents(source_path: Path) -> list[Path]:
     if source_path.is_file():
@@ -221,19 +197,12 @@ def extract_markdown(result: object) -> str:
         raise RuntimeError("Docling result did not include a document object.")
 
     export_to_markdown = getattr(document, "export_to_markdown", None)
-    if callable(export_to_markdown):
-        markdown = export_to_markdown()
-        if isinstance(markdown, str):
-            return markdown
-
-    export_to_text = getattr(document, "export_to_text", None)
-    if callable(export_to_text):
-        text = export_to_text()
-        if isinstance(text, str):
-            return text
-
-    text = str(document)
-    return text if isinstance(text, str) else ""
+    if not callable(export_to_markdown):
+        raise RuntimeError("Docling document does not expose export_to_markdown().")
+    markdown = export_to_markdown()
+    if not isinstance(markdown, str):
+        raise RuntimeError("Docling export_to_markdown() did not return text.")
+    return markdown
 
 
 
@@ -368,43 +337,43 @@ def caption_from_item(item: Any, doc: Any) -> str:
             caption = caption_text(doc)
             if isinstance(caption, str):
                 return caption.strip()
-        except Exception:
-            return ""
+            raise RuntimeError("caption_text() did not return a string.")
+        except Exception as exc:
+            raise RuntimeError("Failed to extract item caption.") from exc
     return ""
 
 
 def markdown_from_item(item: Any, doc: Any) -> str:
     export_to_markdown = getattr(item, "export_to_markdown", None)
-    if callable(export_to_markdown):
-        try:
-            value = export_to_markdown(doc)
-            if isinstance(value, str):
-                return value.strip()
-        except Exception:
-            return ""
-    return ""
+    if not callable(export_to_markdown):
+        raise RuntimeError("Item does not expose export_to_markdown().")
+    try:
+        value = export_to_markdown(doc)
+    except Exception as exc:
+        raise RuntimeError("Failed to export item markdown.") from exc
+    if not isinstance(value, str):
+        raise RuntimeError("export_to_markdown() did not return text.")
+    return value.strip()
 
 
 def table_text_from_item(item: Any, doc: Any) -> str:
     export_to_dataframe = getattr(item, "export_to_dataframe", None)
-    if callable(export_to_dataframe):
-        try:
-            dataframe = export_to_dataframe(doc)
-            to_markdown = getattr(dataframe, "to_markdown", None)
-            if callable(to_markdown):
-                try:
-                    return str(to_markdown(index=False)).strip()
-                except Exception:
-                    pass
-            to_csv = getattr(dataframe, "to_csv", None)
-            if callable(to_csv):
-                try:
-                    return str(to_csv(index=False)).strip()
-                except Exception:
-                    pass
-        except Exception:
-            pass
-    return markdown_from_item(item, doc)
+    if not callable(export_to_dataframe):
+        raise RuntimeError("Table item does not expose export_to_dataframe().")
+    try:
+        dataframe = export_to_dataframe(doc)
+    except Exception as exc:
+        raise RuntimeError("Failed to export table dataframe.") from exc
+    to_markdown = getattr(dataframe, "to_markdown", None)
+    if not callable(to_markdown):
+        raise RuntimeError("Table dataframe does not expose to_markdown().")
+    try:
+        value = to_markdown(index=False)
+    except Exception as exc:
+        raise RuntimeError("Failed to render table markdown.") from exc
+    if not isinstance(value, str):
+        raise RuntimeError("Table markdown renderer did not return text.")
+    return value.strip()
 
 
 def page_number_from_item(item: Any) -> int | None:
@@ -427,14 +396,19 @@ def build_units(parsed_units: list[ParsedUnit]) -> list[dict[str, object]]:
     settings = get_settings()
     units: list[dict[str, object]] = []
     for unit in parsed_units:
-        terms = term_frequencies(unit.text_content)
+        canonical_text = compose_text_content(
+            unit_type=unit.unit_type,
+            text_content=unit.text_content,
+            caption=unit.caption,
+        )
+        terms = term_frequencies(canonical_text)
         units.append(
             {
                 "unit_type": unit.unit_type,
                 "page_number": unit.page_number,
                 "section_name": unit.section_name,
                 "anchor_key": unit.anchor_key,
-                "text_content": unit.text_content,
+                "text_content": canonical_text,
                 "caption": unit.caption,
                 "token_count": sum(terms.values()),
                 "terms": dict(terms),

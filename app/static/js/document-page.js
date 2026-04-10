@@ -1,4 +1,4 @@
-import { bindResultInteractions, deriveDisplayText, renderResultCard } from './result-card-utils.js';
+import { bindResultInteractions, renderResultCard } from './result-card-utils.js';
 
 (() => {
   const { sourceRootId, documentId } = window.DOCUMENT_VIEW_CONFIG || {};
@@ -21,7 +21,7 @@ import { bindResultInteractions, deriveDisplayText, renderResultCard } from './r
       return;
     }
     resultsContainer.innerHTML = results.map((result) => renderResultCard(result, {
-      summaryText: result.text_content || deriveDisplayText(result),
+      summaryText: result.text_content || '',
     })).join('');
   };
 
