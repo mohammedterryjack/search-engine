@@ -64,8 +64,7 @@ export const renderResultCard = (result, options = {}) => {
     ? sectionLabel
     : `${capitalize(result.unit_type)} · ${sectionLabel}`;
   const displayText = (result.text_content || '').trim();
-  const truncatedText = truncateText(displayText);
-  const renderedSnippetHtml = highlightText(truncatedText, query);
+  const renderedSnippetHtml = highlightText(displayText, query);
   const subtitleParts = [`<span>${escapeHtml(result.unit_type)}</span>`];
   if (typeof result.page_number === 'number' && !Number.isNaN(result.page_number)) {
     subtitleParts.push(`<span>Page ${result.page_number}</span>`);

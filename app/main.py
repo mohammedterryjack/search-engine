@@ -150,7 +150,12 @@ def _serialize_search_results(results: list[SearchResult]) -> list[dict[str, obj
 
 
 def _apply_highlights(results: list[SearchResult], query: str) -> None:
-    pass
+    for result in results:
+        text = (result.text_content or "").strip()
+        if text and query:
+            result.highlighted_text = highlight_terms(text, query)
+        else:
+            result.highlighted_text = text
 
 
 def _ai_source_label(result: SearchResult, source_id: int) -> str:
