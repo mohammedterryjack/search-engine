@@ -148,6 +148,28 @@
         <div class="small-status">{{ summarizer_health.error }}</div>
         {% endif %}
       </div>
+      <div class="stat-tile {{ 'status-ok' if summarizer_health.vision.status == 'ok' else 'status-bad' if summarizer_health.vision.status in ('error', 'model-missing') else 'status-neutral' }}">
+        <div class="stat-label">Vision Model</div>
+        <div class="stat-value">
+          {% if summarizer_health.vision.status == 'disabled' %}
+          Disabled
+          {% elif summarizer_health.vision.status == 'ok' %}
+          Enabled
+          {% elif summarizer_health.vision.status == 'model-missing' %}
+          Missing Model
+          {% else %}
+          Error
+          {% endif %}
+        </div>
+        {% if summarizer_health.vision.model_name %}
+        <div class="small-status">{{ summarizer_health.vision.model_name }}</div>
+        {% endif %}
+        {% if summarizer_health.vision.status == 'model-missing' %}
+        <div class="small-status">Model not found in Ollama</div>
+        {% elif summarizer_health.error %}
+        <div class="small-status">{{ summarizer_health.error }}</div>
+        {% endif %}
+      </div>
     </div>
   </section>
 

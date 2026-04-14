@@ -249,12 +249,14 @@ def summarizer_health() -> dict[str, object]:
         normalized_status = "ok" if raw_status in {"ok", "healthy"} else raw_status
         summary_model = str(data.get("summary_model", settings.summarizer_model))
         answer_model = str(data.get("answer_model", ""))
+        vision_model = str(data.get("vision_model", ""))
         return {
             "status": normalized_status,
             "model_name": str(data.get("model", settings.summarizer_model)),
             "url": settings.summarizer_url,
             "summary_model": summary_model,
             "answer_model": answer_model,
+            "vision_model": vision_model,
             "summary": {
                 "status": normalized_status,
                 "model_name": summary_model,
@@ -262,6 +264,10 @@ def summarizer_health() -> dict[str, object]:
             "answer": {
                 "status": normalized_status,
                 "model_name": answer_model,
+            },
+            "vision": {
+                "status": normalized_status,
+                "model_name": vision_model,
             },
         }
     except (urllib.error.URLError, TimeoutError, ValueError) as exc:
