@@ -137,6 +137,7 @@ def _serialize_search_results(results: list[SearchResult]) -> list[dict[str, obj
             {
                 "source_root_id": result.source_root_id,
                 "content_unit_id": result.content_unit_id,
+                "document_path": result.document_path,
                 "unit_type": result.unit_type,
                 "page_number": result.page_number,
                 "section_name": result.section_name,

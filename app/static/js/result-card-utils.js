@@ -82,6 +82,7 @@ export const renderResultCard = (result, options = {}) => {
 
   return `
     <article class="result-card">
+      <div class="result-path">${escapeHtml(result.document_path || '')}</div>
       <h2 class="result-title">
         <a href="/open/${result.source_root_id}/${result.content_unit_id}">
           ${escapeHtml(titleText)}

@@ -135,6 +135,7 @@ def test_serialize_search_results_returns_public_api_shape() -> None:
         {
             "source_root_id": 1,
             "content_unit_id": 9,
+            "document_path": "/docs/paper.pdf",
             "unit_type": "section",
             "page_number": 3,
             "section_name": "Introduction",
@@ -172,7 +173,7 @@ def test_serialize_search_results_defaults_missing_text_content_to_empty_string(
     assert "score" not in payload[0]
     assert "source_path" not in payload[0]
     assert "document_id" not in payload[0]
-    assert "document_path" not in payload[0]
+    assert payload[0]["document_path"] == "/docs/paper.pdf"
     assert "display_text" not in payload[0]
     assert "filename" not in payload[0]
     assert payload[0]["highlighted_text"] == ""
