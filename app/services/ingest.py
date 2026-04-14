@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import re
+import urllib.request
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -8,6 +10,7 @@ from typing import Any
 
 from app.db.global_store import utc_now
 from app.config import get_settings
+from app.env import require_env
 from app.services.content_units import compose_text_content
 from app.services.tokenize import term_frequencies
 
@@ -81,6 +84,56 @@ def strip_image_markup(text: str) -> str:
     cleaned = MARKDOWN_IMAGE_RE.sub(" ", text)
     cleaned = HTML_IMAGE_RE.sub(" ", cleaned)
     return " ".join(cleaned.split())
+
+
+def generate_image_caption(image_data: str) -> str:
+    """Generate caption for an image using Ollama's llava model.
+
+    Args:
+        image_data: Base64-encoded image data (without the data URI prefix)
+
+    Returns:
+        Generated caption text, or empty string if captioning fails
+    """
+    try:
+        ollama_url = require_env("OLLAMA_URL").rstrip("/")
+
+        payload = {
+            "model": "llava",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "Describe this image in one concise sentence suitable as a figure caption.",
+                    "images": [image_data]
+                }
+            ],
+            "stream": False,
+            "options": {
+                "temperature": 0.3,
+                "num_predict": 100,
+            }
+        }
+
+        request = urllib.request.Request(
+            f"{ollama_url}/api/chat",
+            data=json.dumps(payload).encode("utf-8"),
+            method="POST",
+            headers={"Content-Type": "application/json; charset=utf-8"},
+        )
+
+        with urllib.request.urlopen(request, timeout=30) as response:
+            data = json.loads(response.read().decode("utf-8"))
+
+        if data.get("error"):
+            return ""
+
+        message = data.get("message", {})
+        caption = str(message.get("content", "")).strip() if isinstance(message, dict) else ""
+        return caption
+
+    except Exception:
+        # Silently fail - captioning is optional enhancement
+        return ""
 
 
 # Global singleton converter to prevent OCR models from reloading on each document
@@ -284,6 +337,15 @@ def extract_structured_units(doc: Any) -> list[ParsedUnit]:
                 picture_text = markdown_from_item(item, doc)
                 cleaned_picture_text = strip_image_markup(picture_text)
                 image_mime, image_data = extract_image_data(picture_text)
+
+                # If no text or caption, try generating caption from image with llava
+                if not cleaned_picture_text.strip() and not caption.strip() and image_data:
+                    caption = generate_image_caption(image_data)
+
+                # Skip if still no content after captioning attempt
+                if not cleaned_picture_text.strip() and not caption.strip():
+                    continue
+
                 units.append(
                     ParsedUnit(
                         unit_type="figure",

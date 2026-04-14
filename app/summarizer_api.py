@@ -24,6 +24,7 @@ ANSWER_PROMPT = (PROMPTS_DIR / "answer.txt").read_text().strip()
 OLLAMA_URL = require_env("OLLAMA_URL").rstrip("/")
 SUMMARY_MODEL = require_env("SEARCHY_SUMMARY_MODEL")
 AI_MODEL = require_env("SEARCHY_AI_MODEL")
+VISION_MODEL = "llava"
 OLLAMA_TIMEOUT = float(require_env("SEARCHY_SUMMARIZER_TIMEOUT"))
 OLLAMA_NUM_CTX = int(require_env("SEARCHY_SUMMARIZER_NUM_CTX"))
 
@@ -110,17 +111,21 @@ def _stream_generate(payload: dict[str, object]):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info(
-        "Checking Ollama summary model %s and AI model %s at %s",
+        "Checking Ollama models: summary=%s, AI=%s, vision=%s at %s",
         SUMMARY_MODEL,
         AI_MODEL,
+        VISION_MODEL,
         OLLAMA_URL,
     )
     if not _model_available(SUMMARY_MODEL):
         _pull_model(SUMMARY_MODEL)
     if not _model_available(AI_MODEL):
         _pull_model(AI_MODEL)
+    if not _model_available(VISION_MODEL):
+        _pull_model(VISION_MODEL)
     _warm_model(SUMMARY_MODEL)
     _warm_model(AI_MODEL)
+    _warm_model(VISION_MODEL)
     yield
 
 
@@ -248,24 +253,32 @@ async def answer(request: AnswerRequest):
 @app.get("/health")
 async def health():
     try:
-        if _model_available(SUMMARY_MODEL) and _model_available(AI_MODEL):
+        all_available = (
+            _model_available(SUMMARY_MODEL)
+            and _model_available(AI_MODEL)
+            and _model_available(VISION_MODEL)
+        )
+        if all_available:
             return {
                 "status": "healthy",
-                "model": f"summary={SUMMARY_MODEL}; answer={AI_MODEL}",
+                "model": f"summary={SUMMARY_MODEL}; answer={AI_MODEL}; vision={VISION_MODEL}",
                 "summary_model": SUMMARY_MODEL,
                 "answer_model": AI_MODEL,
+                "vision_model": VISION_MODEL,
             }
         return {
             "status": "model-missing",
-            "model": f"summary={SUMMARY_MODEL}; answer={AI_MODEL}",
+            "model": f"summary={SUMMARY_MODEL}; answer={AI_MODEL}; vision={VISION_MODEL}",
             "summary_model": SUMMARY_MODEL,
             "answer_model": AI_MODEL,
+            "vision_model": VISION_MODEL,
         }
     except (urllib.error.URLError, TimeoutError, ValueError) as exc:
         return {
             "status": "error",
-            "model": f"summary={SUMMARY_MODEL}; answer={AI_MODEL}",
+            "model": f"summary={SUMMARY_MODEL}; answer={AI_MODEL}; vision={VISION_MODEL}",
             "summary_model": SUMMARY_MODEL,
             "answer_model": AI_MODEL,
+            "vision_model": VISION_MODEL,
             "error": str(exc),
         }
